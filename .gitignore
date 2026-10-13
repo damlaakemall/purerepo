@@ -2,5 +2,11 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-data/
 .DS_Store
+# large local data and run outputs (NOT llm_routing/data, which is code)
+/data/
+/runs/
+/wandb/
+slurm-*.out
+/logs/
+*.egg-info/

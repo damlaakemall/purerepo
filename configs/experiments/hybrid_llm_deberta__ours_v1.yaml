@@ -1,0 +1,9 @@
+# Main comparison setting: paper-faithful router on OUR benchmark (run on Tosun).
+name: hybrid_llm_deberta_trans
+seed: 0
+benchmark: configs/benchmarks/ours_v1.yaml
+router: configs/routers/hybrid_llm_deberta.yaml
+overrides:
+  router: {models: {small: qwen2.5-1.5b, large: qwen2.5-7b}}
+baselines: [random_binary, oracle]
+wandb: {enabled: true, project: llm-routing}

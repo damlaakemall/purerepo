@@ -1,0 +1,8 @@
+name: hybrid_llm_trans
+seed: 0
+benchmark: configs/benchmarks/synthetic.yaml
+router: configs/routers/hybrid_llm.yaml
+overrides:
+  router: {models: {small: small, large: large}}
+baselines: [random_binary, oracle]
+wandb: {enabled: false, project: llm-routing}

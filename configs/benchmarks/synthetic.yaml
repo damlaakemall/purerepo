@@ -1,0 +1,15 @@
+# CPU-only toy benchmark: 4 models with different difficulty slopes and costs. For tests and learning.
+name: synthetic
+loader: synthetic
+path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/synthetic
+params:
+  n: 4000
+  k: 10
+  seed: 0
+  noise: 0.35
+  splits: {train: 0.7, val: 0.1, test: 0.2}
+  models:            # name: [difficulty slope, offset, cost]
+    tiny: [2.2, 0.3, 0.1]
+    small: [1.6, 0.1, 0.3]
+    medium: [1.0, 0.0, 1.0]
+    large: [0.6, 0.0, 3.0]

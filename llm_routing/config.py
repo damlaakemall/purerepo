@@ -1,0 +1,58 @@
+"""YAML experiment configs.
+
+An experiment file points to one benchmark config and one router config and may
+override any field of either:
+
+    # configs/experiments/hybrid_llm__mixinstruct.yaml
+    name: hybrid_llm_trans__mixinstruct
+    seed: 0
+    benchmark: configs/benchmarks/mixinstruct.yaml
+    router: configs/routers/hybrid_llm.yaml
+    overrides:
+      router: {params: {mode: trans}}
+    baselines: [random_binary, oracle]
+    wandb: {enabled: false, project: llm-routing}
+
+Command-line overrides use dot notation:  router.params.mode=prob  seed=1
+``${oc.env:LLMR_DATA_ROOT,data}`` in any path reads an environment variable
+(used on the cluster to put data on scratch storage).
+"""
+
+from __future__ import annotations
+
+import os
+
+from omegaconf import OmegaConf
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _resolve_path(p: str) -> str:
+    return p if os.path.isabs(p) or os.path.exists(p) else os.path.join(REPO_ROOT, p)
+
+
+def load_yaml(path: str):
+    return OmegaConf.load(_resolve_path(path))
+
+
+def load_experiment(path: str, cli_overrides: list[str] | None = None) -> dict:
+    exp = load_yaml(path)
+    cfg = OmegaConf.create({k: v for k, v in exp.items() if k not in ("benchmark", "router", "overrides")})
+    cfg.benchmark = load_yaml(exp.benchmark) if isinstance(exp.benchmark, str) else exp.benchmark
+    cfg.router = load_yaml(exp.router) if isinstance(exp.router, str) else exp.router
+    if "overrides" in exp:
+        cfg = OmegaConf.merge(cfg, exp.overrides)
+    if cli_overrides:
+        cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(cli_overrides))
+    cfg.setdefault("seed", 0)
+    cfg.setdefault("baselines", [])
+    cfg.setdefault("wandb", {"enabled": False})
+    cfg.setdefault("output_dir", "runs")
+    return OmegaConf.to_container(cfg, resolve=True)
+
+
+def load_benchmark_config(path: str, cli_overrides: list[str] | None = None) -> dict:
+    cfg = load_yaml(path)
+    if cli_overrides:
+        cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(cli_overrides))
+    return OmegaConf.to_container(cfg, resolve=True)

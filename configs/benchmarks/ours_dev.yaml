@@ -1,0 +1,46 @@
+# Tiny dev version of ours_v1 to test the cluster pipeline end to end (~minutes). Not for results.
+name: ours_dev
+loader: generated
+path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/ours_dev
+hub_repo: null
+seed: 0
+splits: {train: 0.8, val: 0.1, test: 0.1}
+
+sources:
+  - name: mixinstruct     # open-ended instructions (as in Hybrid LLM)
+    hf_id: llm-blender/mix-instruct
+    hf_split: train
+    n: 50
+    query_template: "{instruction}\n{input}"
+    reference_field: output
+    scorer: bartscore
+  - name: gsm8k           # math word problems with a numeric answer
+    hf_id: openai/gsm8k
+    hf_config: main
+    hf_split: train
+    n: 50
+    query_template: "{question}\nSolve step by step, then give the final answer after '####'."
+    reference_field: answer
+    scorer: exact_match_number
+  - name: mmlu            # multiple-choice knowledge questions
+    hf_id: cais/mmlu
+    hf_config: all
+    hf_split: test
+    n: 50
+    formatter: mmlu
+    scorer: multiple_choice
+
+models:                   # cost_per_1k_tokens: proxy proportional to parameter count
+  - {name: qwen2.5-0.5b, hf_id: Qwen/Qwen2.5-0.5B-Instruct, cost_per_1k_tokens: 0.5}
+  - {name: qwen2.5-1.5b, hf_id: Qwen/Qwen2.5-1.5B-Instruct, cost_per_1k_tokens: 1.5}
+
+generation:
+  k: 2
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 512
+  engine: vllm            # or hf
+  batch_size: 256
+
+scoring:
+  bartscore: {model_name: facebook/bart-large-cnn, batch_size: 32}

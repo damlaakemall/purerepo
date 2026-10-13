@@ -1,64 +1,74 @@
-# LLM Routing — paper implementations
+# LLM Routing — a common ground for comparing routers
 
-Implementations of LLM **routing** papers behind one common interface, written for understanding first. Every router can be trained and compared on the same data with the same metrics.
+Implementations of LLM **routing** papers, written to understand *what* each router does and *how*, and to compare them **fairly**: every router is trained on the same frozen data, evaluated on the same test split, with the same metrics and baselines.
 
-| paper | venue | type | code | notes |
+> **Routing:** given a query and a pool of LLMs with different costs and abilities, decide which model answers it, so you get the best quality for the money.
+
+| paper | family | how it decides | code | explainer |
 |---|---|---|---|---|
-| [Hybrid LLM: Cost-Efficient and Quality-Aware Query Routing](https://arxiv.org/abs/2404.14618) | ICLR 2024 | binary, pre-generation, soft-label classifier | [`routers/hybrid_llm`](llm_routing/routers/hybrid_llm/) | [explainer](docs/papers/hybrid_llm.md) |
+| [Hybrid LLM](https://arxiv.org/abs/2404.14618) (ICLR 2024) | binary | classifier predicts Pr[small model is good enough], threshold | [`routers/hybrid_llm`](llm_routing/routers/hybrid_llm/) | [docs](docs/papers/hybrid_llm.md) |
+| *quality regression* (RouterBench baseline) | multi-model | predict every model's quality, pick argmax(quality − λ·cost) | [`routers/baselines.py`](llm_routing/routers/baselines.py) | [docs](docs/comparison.md) |
 | *next paper…* | | | | |
 
-New to routing? Start with [docs/routing_fundamentals.md](docs/routing_fundamentals.md).
+**Start here:** [routing fundamentals](docs/routing_fundamentals.md) → [how routers are compared](docs/comparison.md) → [benchmarks & fairness rules](docs/benchmarks.md) → [metrics](docs/evaluation.md) → [current leaderboard](results/leaderboard.md).
 
-## Layout
+## How it fits together
+
+```
+configs/benchmarks/*.yaml ──► frozen Benchmark (queries, scores[N,M,k], costs[N,M], fixed splits, fingerprint)
+                                   │            (built once on Tosun, shared via HF Hub)
+configs/routers/*.yaml   ──► Router.fit(train, val) ──► Router.sweep(test) ──► quality/cost curve
+configs/experiments/*.yaml         (registry)              same evaluation for every router
+                                                                │
+                                         runs/<benchmark>/<experiment>/<time>_s<seed>/  +  W&B
+                                                                │
+                                                  llmr leaderboard ──► results/leaderboard.md
+```
 
 ```
 llm_routing/
-  core/
-    base.py          Router interface: fit(), score(), route(threshold)
-    types.py         RoutingDataset (queries + k quality scores per model)
-    metrics.py       cost advantage, quality drop, threshold sweep, AUC
-    classifiers.py   soft-label text classifiers (TF-IDF+LR on CPU, DeBERTa as in paper)
-    quality.py       BARTScore
-    generation.py    sample k responses from HF models
-  routers/
-    baselines.py     random router, oracle router
-    hybrid_llm/      labels.py (r_det / r_prob / r_trans + t*), router.py
-  data/              synthetic data, MixInstruct loader, JSONL io
-  experiment.py      compare routers, print table, plot curves
-scripts/             run_hybrid_llm.py, generate_responses.py, score_responses.py
-docs/                concepts + one explainer per paper
-tests/
+  core/        base.py (Router, BinaryRouter, MultiModelRouter, CascadeRouter), evaluation.py, classifiers.py
+  routers/     one folder per paper + baselines.py
+  data/        benchmark.py (shared format), mixinstruct / routerbench / synthetic loaders, hub.py
+  pipeline/    build our own benchmark: build-queries -> generate -> score -> assemble
+  runner.py    the single train+evaluate procedure;  cli.py: the `llmr` command
+configs/       benchmarks/, routers/, experiments/
+cluster/tosun/ SLURM setup + job scripts for Sabancı's Tosun cluster
+docs/          fundamentals, comparison, benchmarks, evaluation, one explainer per paper
 ```
 
-## Quick start
+## Quick start (laptop, CPU)
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 1) synthetic data, CPU, seconds
-python scripts/run_hybrid_llm.py --data synthetic --offset 0.3
-
-# 2) real data: MixInstruct with precomputed BARTScores
-python scripts/run_hybrid_llm.py --data mixinstruct --small alpaca-native --large vicuna-13b-1.1
-
-# 3) paper-faithful router (DeBERTa-v3-large, GPU recommended)
-pip install -r requirements-gpu.txt
-python scripts/run_hybrid_llm.py --data mixinstruct --small flan-t5-xxl --large vicuna-13b-1.1 --backend deberta
-
-# 4) full pipeline with k=10 samples per model, as in the paper
-python scripts/generate_responses.py --small <hf-small> --large <hf-large> --split train --max-examples 10000 --out data/raw_train.jsonl
-python scripts/score_responses.py --inp data/raw_train.jsonl --out data/train.jsonl
-# (same for test) then:
-python scripts/run_hybrid_llm.py --data jsonl --train data/train.jsonl --test data/test.jsonl
-
+llmr routers                                                    # list available routers
+llmr train configs/experiments/hybrid_llm__synthetic.yaml       # seconds, no downloads
+llmr train configs/experiments/hybrid_llm__mixinstruct.yaml     # real data (downloads MixInstruct)
+llmr train configs/experiments/hybrid_llm__mixinstruct.yaml router.params.mode=det seed=1   # overrides
+llmr leaderboard
 pytest -q
 ```
 
-Each run prints a table and writes a cost/quality curve to `results/`.
+## On the cluster (Tosun)
 
-## Results so far (Hybrid LLM, TF-IDF router, MixInstruct)
+See [cluster/tosun/README.md](cluster/tosun/README.md): one-time setup, then
 
-![alpaca vs vicuna](results/mixinstruct_alpaca-native_vs_vicuna-13b-1.1.png)
+```bash
+bash cluster/tosun/submit_pipeline.sh configs/benchmarks/ours_v1.yaml --push    # build our benchmark
+bash cluster/tosun/submit_train.sh configs/experiments/hybrid_llm_deberta__ours_v1.yaml 3   # 3 seeds
+```
 
-alpaca-native → vicuna-13b: **57% of queries go to the small model with < 1% quality drop** (random router: 22%). Details and discussion are in [docs/papers/hybrid_llm.md](docs/papers/hybrid_llm.md#7-our-results-tf-idf-router-cpu).
+## Adding a router or benchmark
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: one folder in `llm_routing/routers/`, one YAML in `configs/routers/`, one explainer in `docs/papers/`, one row in [docs/comparison.md](docs/comparison.md).
+
+## Results so far
+
+Full table: [results/leaderboard.md](results/leaderboard.md). TF-IDF routers on CPU; paper-faithful DeBERTa runs on Tosun are next.
+
+| | |
+|---|---|
+| ![](results/plots/hybrid_llm_trans__mixinstruct.png) | ![](results/plots/quality_regression__routerbench.png) |
+| **Hybrid LLM** (alpaca-7B → vicuna-13B): 56% of queries to the small model at < 1% quality drop; matches vicuna's quality at 90% of its cost. | **Quality regression** on RouterBench (11 models): beats every single model except GPT-4 at a fraction of the cost, but is far below the oracle. There's a lot of room for better routers. |

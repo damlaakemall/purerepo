@@ -24,14 +24,10 @@ Given a query and a pool of LLMs with different costs and abilities, **choose wh
 - **Soft labels**: training targets in [0,1] instead of {0,1}. They preserve "how often" information. BCE works unchanged.
 - **Class imbalance**: if one model almost always wins, binary labels collapse to one class. Fixes: relabel with a margin (Hybrid LLM's *t*), reweight the loss, or resample.
 - **Threshold / operating point**: a scoring router plus a threshold gives a whole family of policies. Pick the threshold for your budget on validation data.
-- **Cost advantage / quality drop / AUC**: see [`core/metrics.py`](../llm_routing/core/metrics.py). Always report the **random router** and the **oracle** as reference lines.
+- **Cost advantage / quality drop / AUC**: see [evaluation.md](evaluation.md). Always report the **random router** and the **oracle** as reference lines.
 - **Calibration**: when you threshold on raw probabilities, they should mean what they say. Thresholding on *quantiles*, as `sweep` does, avoids depending on calibration.
 - **Distribution shift**: a router trained on one query distribution may misroute on another, e.g. a new domain.
 
 ## Adding a new paper to this repo
 
-1. Create `llm_routing/routers/<paper_name>/` and implement the `Router` interface (`fit`, `score`). Keep the convention **higher score = cheap model is fine**.
-2. Reuse `core/classifiers.py` if the router is a text classifier; reuse `core/metrics.py` and `experiment.compare_routers` for evaluation.
-3. If the paper needs new data (N models, preference labels…), add a loader in `llm_routing/data/` and, if necessary, extend `RoutingDataset`. For N-model routing, add a `MultiModelDataset` rather than breaking the binary one.
-4. Write `docs/papers/<paper_name>.md` following the structure of [`hybrid_llm.md`](papers/hybrid_llm.md), and add a row to the comparison table in the README.
-5. Add tests in `tests/`.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) and fill in a router card in [comparison.md](comparison.md).

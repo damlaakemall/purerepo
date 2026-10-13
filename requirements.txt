@@ -1,6 +1,1 @@
-numpy
-scipy
-scikit-learn
-matplotlib
-datasets
-pytest
+-e .[dev]

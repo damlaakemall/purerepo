@@ -1,0 +1,11 @@
+# Public multi-model benchmark (Hu et al. 2024). 11 models, 0/1 correctness, real USD costs, k=1.
+name: routerbench
+loader: routerbench
+path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/routerbench
+hub_repo: null
+params:
+  variant: 0shot
+  seed: 0
+  splits: {train: 0.7, val: 0.1, test: 0.2}
+  max_queries: null
+  keep_responses: false

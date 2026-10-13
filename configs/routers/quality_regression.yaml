@@ -1,0 +1,4 @@
+# Multi-model baseline: per-model quality regression on TF-IDF, route by argmax(quality - lambda * cost).
+type: quality_regression
+models: null              # null = all models of the benchmark
+params: {alpha: 1.0}
