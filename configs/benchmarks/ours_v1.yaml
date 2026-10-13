@@ -1,6 +1,6 @@
 # OUR benchmark: same queries + same model pool + k samples, generated and scored once on Tosun,
 # then frozen and shared via the HF Hub. Every router in the repo is compared on it.
-# TODO(team): confirm the query mix, the model pool and the cost proxy before the first cluster run.
+# Query mix: decided. Model pool + cost proxy: STILL OPEN — see DECISIONS.md (#1, #2) before the first cluster run.
 name: ours_v1
 loader: generated
 path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/ours_v1
@@ -32,7 +32,7 @@ sources:
     formatter: mmlu
     scorer: multiple_choice
 
-models:                   # cost_per_1k_tokens: proxy proportional to parameter count
+models:                   # DRAFT pool, see DECISIONS.md #1. cost_per_1k_tokens: proxy ∝ parameter count (#2)
   - {name: qwen2.5-0.5b, hf_id: Qwen/Qwen2.5-0.5B-Instruct, cost_per_1k_tokens: 0.5}
   - {name: qwen2.5-1.5b, hf_id: Qwen/Qwen2.5-1.5B-Instruct, cost_per_1k_tokens: 1.5}
   - {name: qwen2.5-3b,   hf_id: Qwen/Qwen2.5-3B-Instruct,   cost_per_1k_tokens: 3.0}

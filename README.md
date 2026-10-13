@@ -10,6 +10,8 @@ Implementations of LLM **routing** papers, written to understand *what* each rou
 | *quality regression* (RouterBench baseline) | multi-model | predict every model's quality, pick argmax(quality − λ·cost) | [`routers/baselines.py`](llm_routing/routers/baselines.py) | [docs](docs/comparison.md) |
 | *next paper…* | | | | |
 
+**Open team decisions:** [DECISIONS.md](DECISIONS.md) (LLM pool for our benchmark, cost proxy, …).
+
 **Start here:** [routing fundamentals](docs/routing_fundamentals.md) → [how routers are compared](docs/comparison.md) → [benchmarks & fairness rules](docs/benchmarks.md) → [metrics](docs/evaluation.md) → [current leaderboard](results/leaderboard.md).
 
 ## How it fits together

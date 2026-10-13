@@ -27,6 +27,8 @@ Llama-3.1 is a gated model: accept its license on its Hugging Face page with the
 
 ## 2. Build our benchmark (once per benchmark version)
 
+> Check [DECISIONS.md](../../DECISIONS.md) first. The `ours_v1` model pool is still a draft (open item #1).
+
 ```bash
 bash cluster/tosun/submit_pipeline.sh configs/benchmarks/ours_v1.yaml --push
 squeue -u $USER             # watch jobs; logs in logs/
