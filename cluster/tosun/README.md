@@ -36,7 +36,7 @@ squeue -u $USER             # watch jobs; logs in logs/
 
 This runs `build-queries` on the login node, then for each model a **generate** job and a **score** job (SLURM arrays), then **assemble**, which freezes the data and pushes it to the HF Hub. Generation can resume: if a job hits its time limit, resubmit the same command and it continues where it stopped.
 
-**Try it small first:** copy `ours_v1.yaml` to `ours_dev.yaml` with `n: 50` per source, `k: 2` and two models, and run the pipeline on that.
+**Try it small first:** `configs/benchmarks/ours_dev.yaml` (50 queries per source, k=2, two small models) runs the whole pipeline in minutes: `bash cluster/tosun/submit_pipeline.sh configs/benchmarks/ours_dev.yaml`.
 
 ## 3. Train routers
 
