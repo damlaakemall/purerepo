@@ -1,0 +1,6 @@
+name: quality_regression
+seed: 0
+benchmark: configs/benchmarks/routerbench.yaml
+router: configs/routers/quality_regression.yaml
+baselines: [oracle]
+wandb: {enabled: false, project: llm-routing}

@@ -5,9 +5,10 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from llm_routing.core.metrics import area_under_curve, evaluate_decisions, sweep  # noqa: E402
-from llm_routing.data.synthetic import make_synthetic  # noqa: E402
-from llm_routing.routers.baselines import RandomRouter  # noqa: E402
+from llm_routing.core.evaluation import summarize  # noqa: E402
+from llm_routing.core.metrics import evaluate_decisions  # noqa: E402
+from llm_routing.data.synthetic import make_synthetic, make_synthetic_benchmark  # noqa: E402
+from llm_routing.routers.baselines import RandomBinaryRouter  # noqa: E402
 from llm_routing.routers.hybrid_llm import (  # noqa: E402
     HybridLLMRouter,
     deterministic_labels,
@@ -55,9 +56,9 @@ def test_metrics_endpoints():
 
 
 def test_routers_beat_random():
-    train, test = make_synthetic(n=3000, offset=0.3, seed=0).split((0.75, 0.25))
-    q_s, q_l = test.realized_scores()
-    rand_auc = area_under_curve(sweep(RandomRouter(0).score(test.queries), q_s, q_l))
+    bench = make_synthetic_benchmark(n=3000, seed=0).select_models(["small", "large"])
+    train, test = bench.split("train"), bench.split("test")
+    rand = summarize(RandomBinaryRouter("small", "large").sweep(test), test)["aiq"]
     for mode in ("det", "prob", "trans"):
-        r = HybridLLMRouter(mode).fit(train)
-        assert area_under_curve(sweep(r.score(test.queries), q_s, q_l)) > rand_auc, mode
+        r = HybridLLMRouter("small", "large", mode=mode).fit(train)
+        assert summarize(r.sweep(test), test)["aiq"] > rand, mode

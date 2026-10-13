@@ -77,9 +77,9 @@ There's no retraining when your budget changes. In practice you pick `τ` on val
 | | paper | this repo |
 |---|---|---|
 | Data | MixInstruct queries | MixInstruct (precomputed scores) · your own generated data · synthetic |
-| Model pairs | Llama-2 7B/13B, Llama-2 13B/GPT-3.5, FLAN-T5 800M/Llama-2 13B, … | any MixInstruct pair, or any HF models via `scripts/generate_responses.py` |
+| Model pairs | Llama-2 7B/13B, Llama-2 13B/GPT-3.5, FLAN-T5 800M/Llama-2 13B, … | any MixInstruct pair, or our own model pool (`configs/benchmarks/ours_v1.yaml`, built on Tosun) |
 | Samples per model | 10 | MixInstruct: **1** (so r_prob = r_det); synthetic / own generation: 10 |
-| Router encoder | DeBERTa-v3-large | `--backend deberta` (paper) or `--backend tfidf` (CPU, fast) |
+| Router encoder | DeBERTa-v3-large | `configs/routers/hybrid_llm_deberta.yaml` (paper) or `configs/routers/hybrid_llm.yaml` (TF-IDF, CPU, fast) |
 | Quality metric | BARTScore | BARTScore (`core/quality.py`) |
 
 ## 7. Our results (TF-IDF router, CPU)
@@ -98,9 +98,15 @@ MixInstruct, 10k train / 5k test, BARTScore, one sample per model:
 What this shows:
 1. When the two models are close, a learned router sends **more than half** of the traffic to the small model with under 1% quality loss. This is consistent with the paper's "up to 40% fewer large-model calls with no quality drop".
 2. When the small model is much weaker, routing helps less, and r_trans (the imbalance fix) helps most at higher cost advantages.
-3. With k=1, r_prob is identical to r_det. On synthetic data with k=10 (`python scripts/run_hybrid_llm.py --data synthetic`), r_prob and r_trans consistently beat r_det, as the paper reports.
+3. With k=1, r_prob is identical to r_det. On synthetic data with k=10 (`llmr train configs/experiments/hybrid_llm__synthetic.yaml router.params.mode=prob`), r_prob and r_trans consistently beat r_det, as the paper reports.
 
-Re-run with the paper's DeBERTa router (`--backend deberta`) on a GPU for stronger numbers.
+Re-run with the paper's DeBERTa router (`configs/routers/hybrid_llm_deberta.yaml`) on Tosun for stronger numbers.
+
+Reproduce:
+```bash
+llmr train configs/experiments/hybrid_llm__mixinstruct.yaml router.params.mode=trans
+llmr train configs/experiments/hybrid_llm__mixinstruct.yaml router.models.small=flan-t5-xxl name=hybrid_llm_trans_flant5
+```
 
 ## 8. Limitations worth remembering (for future comparisons)
 

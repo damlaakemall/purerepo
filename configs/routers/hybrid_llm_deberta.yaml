@@ -1,0 +1,11 @@
+# Paper-faithful Hybrid LLM router: DeBERTa-v3-large encoder. Run on GPU (Tosun).
+type: hybrid_llm
+models: {small: alpaca-native, large: vicuna-13b-1.1}
+params: {mode: trans, estimator: all_pairs, t: null}
+encoder:
+  backend: transformer
+  model_name: microsoft/deberta-v3-large
+  lr: 1.0e-5
+  epochs: 5
+  batch_size: 16
+  max_length: 512

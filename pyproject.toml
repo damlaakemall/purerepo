@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-routing"
+version = "0.2.0"
+description = "Implementations of LLM routing papers on shared benchmarks, for fair comparison"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy", "scipy", "scikit-learn", "pandas", "matplotlib",
+  "omegaconf>=2.3", "datasets", "huggingface_hub",
+]
+
+[project.optional-dependencies]
+gpu = ["torch", "transformers", "sentencepiece", "protobuf", "accelerate"]
+tracking = ["wandb"]
+dev = ["pytest"]
+
+[project.scripts]
+llmr = "llm_routing.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["llm_routing*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

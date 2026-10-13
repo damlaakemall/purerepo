@@ -1,0 +1,23 @@
+# Public benchmark used by Hybrid LLM. 12 open LLMs, precomputed BARTScore, k=1 sample per model.
+name: mixinstruct
+loader: mixinstruct
+path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/mixinstruct
+hub_repo: null
+params:
+  metric: bartscore
+  max_per_split: {train: 10000, val: 1000, test: 5000}
+  keep_responses: false
+  # MixInstruct has no prices: use parameter count (billions) as a cost proxy
+  model_costs:
+    vicuna-13b-1.1: 13
+    flan-t5-xxl: 11
+    stablelm-tuned-alpha-7b: 7
+    koala-7B-HF: 7
+    dolly-v2-12b: 12
+    chatglm-6b: 6
+    oasst-sft-4-pythia-12b-epoch-3.5: 12
+    llama-7b-hf-baize-lora-bf16: 7
+    moss-moon-003-sft: 16
+    mpt-7b: 7
+    mpt-7b-instruct: 7
+    alpaca-native: 7

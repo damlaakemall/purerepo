@@ -1,0 +1,51 @@
+# OUR benchmark: same queries + same model pool + k samples, generated and scored once on Tosun,
+# then frozen and shared via the HF Hub. Every router in the repo is compared on it.
+# Query mix: decided. Model pool + cost proxy: STILL OPEN — see DECISIONS.md (#1, #2) before the first cluster run.
+name: ours_v1
+loader: generated
+path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/ours_v1
+hub_repo: null            # e.g. damlaakemall/llm-routing-ours-v1 (private)
+seed: 0
+splits: {train: 0.8, val: 0.1, test: 0.1}
+
+sources:
+  - name: mixinstruct     # open-ended instructions (as in Hybrid LLM)
+    hf_id: llm-blender/mix-instruct
+    hf_split: train
+    n: 6000
+    query_template: "{instruction}\n{input}"
+    reference_field: output
+    scorer: bartscore
+  - name: gsm8k           # math word problems with a numeric answer
+    hf_id: openai/gsm8k
+    hf_config: main
+    hf_split: train
+    n: 2000
+    query_template: "{question}\nSolve step by step, then give the final answer after '####'."
+    reference_field: answer
+    scorer: exact_match_number
+  - name: mmlu            # multiple-choice knowledge questions
+    hf_id: cais/mmlu
+    hf_config: all
+    hf_split: test
+    n: 2000
+    formatter: mmlu
+    scorer: multiple_choice
+
+models:                   # DRAFT pool, see DECISIONS.md #1. cost_per_1k_tokens: proxy ∝ parameter count (#2)
+  - {name: qwen2.5-0.5b, hf_id: Qwen/Qwen2.5-0.5B-Instruct, cost_per_1k_tokens: 0.5}
+  - {name: qwen2.5-1.5b, hf_id: Qwen/Qwen2.5-1.5B-Instruct, cost_per_1k_tokens: 1.5}
+  - {name: qwen2.5-3b,   hf_id: Qwen/Qwen2.5-3B-Instruct,   cost_per_1k_tokens: 3.0}
+  - {name: qwen2.5-7b,   hf_id: Qwen/Qwen2.5-7B-Instruct,   cost_per_1k_tokens: 7.0}
+  - {name: llama3.1-8b,  hf_id: meta-llama/Llama-3.1-8B-Instruct, cost_per_1k_tokens: 8.0}
+
+generation:
+  k: 10                   # samples per (query, model); Hybrid LLM uses 10
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 512
+  engine: vllm            # or hf
+  batch_size: 256
+
+scoring:
+  bartscore: {model_name: facebook/bart-large-cnn, batch_size: 32}
