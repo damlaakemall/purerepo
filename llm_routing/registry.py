@@ -1,9 +1,9 @@
 """Name -> class registries, so experiments are chosen in YAML instead of code.
 
-    @register_router("hybrid_llm")
-    class HybridLLMRouter(BinaryRouter): ...
+    @register_router("my_router")
+    class MyRouter(MultiModelRouter): ...
 
-    build_router({"type": "hybrid_llm", "models": {...}, "params": {...}, "encoder": {...}})
+    build_router({"type": "my_router", "models": [...] | {small, large} | null, "params": {...}, "encoder": {...}})
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ ROUTERS: dict[str, type] = {}
 # modules that register routers; add one line per new paper
 ROUTER_MODULES = [
     "llm_routing.routers.baselines",
-    "llm_routing.routers.hybrid_llm",
 ]
 
 

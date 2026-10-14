@@ -6,7 +6,7 @@
 
 export LLMR_REPO="${LLMR_REPO:-$HOME/purerepo}"                 # where the repo is cloned (/cta/users/<you>/purerepo)
 export LLMR_DATA_ROOT="${LLMR_DATA_ROOT:-$HOME/llmr_data}"       # releases and contributions (large)
-export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"           # model downloads: ~250 GB for the 9-model pool
+export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"           # model downloads: ~300 GB for the 12-model pool
 export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-$HF_HOME/datasets}"
 export LLMR_VENV="${LLMR_VENV:-$LLMR_REPO/.venv}"
 

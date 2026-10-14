@@ -3,17 +3,17 @@
 An experiment file points to one benchmark config and one router config and may
 override any field of either:
 
-    # configs/experiments/hybrid_llm__mixinstruct.yaml
-    name: hybrid_llm_trans__mixinstruct
+    # configs/experiments/quality_regression__routerbench.yaml
+    name: quality_regression
     seed: 0
-    benchmark: configs/benchmarks/mixinstruct.yaml
-    router: configs/routers/hybrid_llm.yaml
+    benchmark: configs/benchmarks/routerbench.yaml
+    router: configs/routers/quality_regression.yaml
     overrides:
-      router: {params: {mode: trans}}
-    baselines: [random_binary, oracle]
+      router: {params: {alpha: 1.0}}
+    baselines: [oracle]
     wandb: {enabled: false, project: llm-routing}
 
-Command-line overrides use dot notation:  router.params.mode=prob  seed=1
+Command-line overrides use dot notation:  router.params.alpha=0.5  seed=1
 ``${oc.env:LLMR_DATA_ROOT,data}`` in any path reads an environment variable
 (used on the cluster to put data on scratch storage).
 """

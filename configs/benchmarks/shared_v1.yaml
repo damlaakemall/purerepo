@@ -90,6 +90,6 @@ scoring:
     device_map: auto
     text_policy: strip_think
 cost:
-  definition: token_proxy  # active-parameter proxy, NOT USD; see configs/model_pools/team.yaml
+  definition: token_proxy  # parameter-count proxy, NOT USD; see configs/model_pools/team.yaml
   snapshot_date: "2026-10-15"
-  note: "cost_per_1k_tokens = active parameters (B). Local Tosun GPUs only, no API prices. DECISIONS.md #2."
+  note: "cost_per_1k_tokens = parameters (B), all models dense. Local Tosun GPUs only, no API prices. DECISIONS.md #2."

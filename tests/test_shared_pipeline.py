@@ -20,7 +20,6 @@ from llm_routing.pipeline.shared.collect import generate, job_spec, score
 from llm_routing.pipeline.shared.dataset import build_queries, load_dataset
 from llm_routing.pipeline.shared.io import digest, read_jsonl, seal, verify, write_json
 from llm_routing.pipeline.shared.smoke import run_smoke
-from llm_routing.routers.hybrid_llm.labels import gap_probability, find_relaxation
 
 
 @pytest.fixture(scope="module")
@@ -219,14 +218,6 @@ def test_selected_sample_quality_and_total_cost(smoke):
         curve([bad], bench)
 
 
-def test_ragged_padding_does_not_count_as_negative_labels():
-    s = np.array([[1, np.nan, np.nan], [0, 1, np.nan]])
-    l = np.array([[1, 0, np.nan], [1, np.nan, np.nan]])
-    assert np.allclose(gap_probability(s, l), [1, 0.5])
-    assert np.allclose(gap_probability(s, l, estimator="paired"), [1, 0])
-    assert np.isfinite(find_relaxation(s, l)[0])
-
-
 def test_query_text_changes_fingerprint_and_load_detects_tamper(smoke, tmp_path):
     cfg, _ = smoke
     b = load_benchmark(cfg)
@@ -246,7 +237,7 @@ def test_cli_dotlist_after_options_and_model_pool(cfg, monkeypatch):
     from llm_routing.pipeline import build
     captured = []
     monkeypatch.setattr(build, "generate", lambda c, m, **kw: captured.append((c, m, kw)))
-    main(["generate", "configs/benchmarks/shared_v1.yaml", "--model", "qwen3-4b", "--member", "alice", "generation.k=2"])
+    main(["generate", "configs/benchmarks/shared_v1.yaml", "--model", "smollm3-3b", "--member", "alice", "generation.k=2"])
     c, m, kw = captured[0]
     assert c["generation"]["k"] == 2 and c["models"][0]["name"] == m and kw["member"] == "alice"
 

@@ -32,13 +32,6 @@ def run_smoke(output):
             package(cfg, name, **args)
     bench = assemble(cfg)
     validate_release(frozen_dir(cfg))
-    from ...routers.hybrid_llm.labels import gap_probability
-    from .io import write_json
-    pair = bench.split("train").pair("tiny", "large")
-    labels = gap_probability(pair.small_scores, pair.large_scores)
     report = evaluate_data(cfg)
-    write_json(Path(cfg["path"]) / "reports" / cfg["version"] / "label_smoke.json",
-               {"method": "existing Hybrid LLM all-pairs labels", "n_train": len(labels),
-                "labels": labels.tolist(), "note": "label construction only; no router training"})
     print(f"[smoke] {len(bench)} queries, {bench.num_models} models, 120 responses; release validated; no models loaded")
     return cfg, report

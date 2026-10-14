@@ -12,7 +12,7 @@ them from the environment, e.g. `LLMR_GPU_TYPE=a100` to request a specific card.
 sinfo -p cuda -o "%20N %12G %8m %t"
 ```
 
-Model weights for the 9-model pool take ~250 GB: point `HF_HOME` at scratch if your home quota is small.
+Model weights for the 12-model pool take ~300 GB: point `HF_HOME` at scratch if your home quota is small.
 No paid APIs are used; everything runs on Tosun GPUs.
 
 ## 1. One-time: environment
@@ -20,7 +20,7 @@ No paid APIs are used; everything runs on Tosun GPUs.
 ```bash
 cd /cta/users/$USER && git clone https://github.com/damlaakemall/purerepo.git && cd purerepo
 bash cluster/tosun/setup_env.sh      # venv, torch for CUDA 12.8, the package, vLLM
-hf auth login                        # model downloads + pushing/pulling releases
+hf auth login                        # model downloads + pushing/pulling releases; accept the Llama and Gemma licenses on huggingface.co first
 wandb login                          # experiment tracking (optional)
 ```
 
@@ -43,8 +43,8 @@ This runs `build-queries` on the login node, then for each model a **generate** 
 ## 3. Train routers
 
 ```bash
-bash cluster/tosun/submit_train.sh configs/experiments/hybrid_llm_deberta__ours_v1.yaml 3       # 3 seeds
-bash cluster/tosun/submit_train.sh configs/experiments/hybrid_llm_deberta__ours_v1.yaml 3 router.params.mode=prob name=hybrid_llm_deberta_prob
+bash cluster/tosun/submit_train.sh configs/experiments/<router>__shared_v1.yaml 3                 # 3 seeds
+bash cluster/tosun/submit_train.sh configs/experiments/<router>__shared_v1.yaml 3 seed=7 name=<variant>   # overrides
 ```
 
 Runs are written to `runs/` and to W&B. If compute nodes have no internet, set `WANDB_MODE=offline` and run `wandb sync` from the login node.
@@ -64,7 +64,7 @@ srun --partition=cuda --qos=cuda --gres=gpu:1 --mem=32G --time=01:00:00 --pty ba
 ## Independent shared-v1 member jobs
 
 For the new protocol use `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` after
-freezing/sharing the dataset. It requests the model's `gpus` (2 for the 27B and 26B-A4B models), then runs
+freezing/sharing the dataset. It requests the model's `gpus` (2 for the 24B, 27B and 32B models), then runs
 GT (CPU) and ArmoRM (1 GPU) scoring in parallel and packages the shard; it never submits router training.
 `LLMR_BATCH_SIZE` (default 256) is how many requests go to vLLM at once. The older `submit_pipeline.sh` continues
 to serve the original ours_v1/ours_dev configs. See [team workflow](../../docs/team_workflow.md).

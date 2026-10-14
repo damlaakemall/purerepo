@@ -23,8 +23,9 @@ flowchart LR
 ```
 
 İlk altı adım burada uygulanır. Sonraki makalelerin label, architecture, loss,
-training ve inference kodu bu çalışma kapsamında eklenmez. Mevcut Hybrid LLM ve
-quality regression çalışmaya devam eder.
+training ve inference kodu bu çalışma kapsamında eklenmez. Quality regression
+baseline'ı çalışmaya devam eder; önceki Hybrid LLM implementasyonu silindi ve yeni
+veriyle baştan yazılacak.
 
 ## 1. Dataset ve kimlik
 
@@ -53,9 +54,10 @@ dataset manifestine yazılır. Çok-config'li kaynaklar (`hf_config` listesi, BB
 motoru kaldırıldı; config'te yazılırsa hata verir.
 
 Havuz: [`configs/model_pools/team.yaml`](../configs/model_pools/team.yaml), referans
-repodaki 12 modelin 9 açık ağırlıklı olanı (Qwen3 4B/8B, Gemma 4 E2B/E4B/26B-A4B,
-Cogito 8B, DeepSeek-R1-Distill 7B, Granite 4.1 8B, Qwen3.6 27B). Üç API modeli
-(kimi-k3, glm-5.3, gpt-5.4) çıkarıldı. Her model ve dataset sabit HF commit'ine
+repodakilerden tamamen farklı 12 açık ağırlıklı model, 3B'den 33B'ye: küçük (SmolLM3 3B,
+Llama 3.2 3B, Phi-4-mini), orta (Mistral 7B v0.3, OLMo 3 7B, Qwen2.5 7B, Llama 3.1 8B,
+DeepSeek-R1-Distill-Llama 8B), büyük (Phi-4 15B, Mistral Small 24B, Gemma 3 27B,
+Qwen2.5 32B). Llama ve Gemma gated'dir: her üye HF'de lisansı kabul etmelidir. Her model ve dataset sabit HF commit'ine
 bağlıdır (2026-10-15); `PIN_*` kalmadı. `gpus: 2` olan modellerde vLLM tensor
 parallelism otomatik açılır ve `submit_member.sh` iki GPU ister.
 
@@ -164,12 +166,11 @@ istenen eksik koleksiyonlara izin verir; eksiklik sayısı manifestte görünür
 `extras` best-of-n ve gecikme duyarlı router'lar içindir: BEST-Route ArmoRM'u
 selector olarak kullanıp seçtiği sample'ın GT'siyle ölçülebilir ve n sample'ın gerçek
 maliyetini öder; MixLLM `seconds` ile gecikme cezası kurabilir. Diziler `(N, M, max_k)` biçimindedir; olmayan sample'lar NaN ile doldurulur. NaN
-bir başarısız yanıt etiketi değildir. Hybrid LLM'nin mevcut probabilistic label
-hesabı padding'i karşılaştırma paydasına katmaz; tam veride aynı sonucu verir.
-Makaleye özgü label'lar frozen matrise yazılmaz.
+bir başarısız yanıt etiketi değildir: k sample'dan label üreten router'lar (ör. Hybrid
+LLM'nin r_prob'u) padding'i paydaya katmamalıdır. Makaleye özgü label'lar frozen matrise yazılmaz.
 
 Cost tanımı sabittir: `token_proxy` = `cost_per_1k_tokens*(input+output)/1000`, burada
-`cost_per_1k_tokens` modelin **aktif** parametre sayısıdır (milyar). **USD diye raporlanmaz.**
+`cost_per_1k_tokens` modelin parametre sayısıdır (milyar; havuzdaki bütün modeller dense). **USD diye raporlanmaz.**
 API kullanılmadığı için `usd_tokens` (input/output per-million fiyat) yalnız ileride
 gerekirse diye kodda durur. Tarihli snapshot, kaynak/note config'te tutulmalıdır.
 Missing price ve usage hatadır; local GPU'ya sessizce sıfır fiyat atanmaz.

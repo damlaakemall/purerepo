@@ -18,7 +18,7 @@ henüz implemente edilmedi; bu tablo implementasyon iddiası değildir):
 
 | # | makale | yayın | release'te hazır olan | implementasyonda dikkat |
 |---|---|---|---|---|
-| 1 | Hybrid LLM (2404.14618) | ICLR 2024 | `scores` (N, M, k=10) — r_prob/r_trans k sample ister | mevcut implementasyon; küçük/büyük çifti havuzdan seçilmeli |
+| 1 | Hybrid LLM (2404.14618) | ICLR 2024 | `scores` (N, M, k=10) — r_prob/r_trans k sample ister | önceki implementasyon silindi, yeni veriyle baştan yazılacak; küçük/büyük çifti havuzdan seçilmeli, NaN padding paydaya girmemeli |
 | 3 | RouteLLM (2406.18665) | ICLR 2025 | sample-0 skorlarından her model çifti için battle | Elo/tier **yalnız train** battle'larından (referans repoda val/test sızıyor); GT judge |
 | 4 | GraphRouter (2410.03834) | ICLR 2025 | `sources` = task düğümü; maliyet (model, kaynak) başına train ortalaması | test kenarları görünmez; test sorguları çıkarımda düğüm olarak eklenir |
 | 5 | MixLLM | NAACL 2025 | `extras/seconds` (gecikme), `completion_tokens`, `sample_cost` | online/sürekli öğrenme için sabit bir sorgu akışı sırası seçilmeli |
@@ -39,8 +39,7 @@ online simulator yoktur. Router'lar kendi `sweep` uygulamasıyla native karar
 kuralını koruyabilir. Ortak evaluator yalnız dönen sample'ın kalitesini ve toplam
 maliyetini ölçer; best-of-N'e ücretsiz oracle selection vermez.
 
-Mevcut baseline/Hybrid LLM davranışı değişmez; sadece NaN padding'e sahip
-probabilistic label paydası düzeltilmiştir. Shared runner her metric/model pool için
+Shared runner her metric/model pool için
 sabit complete-case cohort kullanır, eksilen soruları raporlar. Tam cohort gerekirken
 seçilmiş modelin eksik kalite skorunu sessizce atlamak yasaktır. Native evaluation
 ve gerçek online protokoller ilgili paper implementasyonuyla ayrıca eklenmelidir.

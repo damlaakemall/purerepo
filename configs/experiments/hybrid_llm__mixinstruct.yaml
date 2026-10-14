@@ -1,6 +1,0 @@
-name: hybrid_llm_trans
-seed: 0
-benchmark: configs/benchmarks/mixinstruct.yaml
-router: configs/routers/hybrid_llm.yaml
-baselines: [random_binary, oracle]
-wandb: {enabled: false, project: llm-routing, entity: null}

@@ -1,60 +1,99 @@
-# The routing pool: the 9 open-weight models of SU Lab LLM-Routing-Project, run on Tosun GPUs.
-# No paid APIs: the reference repo's three API models (kimi-k3, glm-5.3, gpt-5.4) are left out.
+# The routing pool: 12 open-weight models run on Tosun GPUs, no paid APIs.
+# Deliberately disjoint from SU Lab LLM-Routing-Project's 12 (Qwen3, Gemma 4, Cogito, R1-Distill-Qwen,
+# Granite 4.1, Qwen3.6, Kimi, GLM, GPT): same prompts and protocol, different models.
+# Sizes span 3B -> 33B so that routing has a real cost/quality spread: 3 small, 5 mid, 4 large.
 # Keep names fixed once a release has results. Revisions are the HF commits pinned on 2026-10-15.
 #
-# cost_per_1k_tokens is the token proxy (cost.definition: token_proxy): ACTIVE parameters in billions,
-# i.e. compute per token. It is not USD. DECISIONS.md #2 tracks whether to switch to measured GPU
-# time; every response also records its share of batch wall-clock time (metadata.batch_seconds_per_sample).
+# Gated: the Llama and Gemma repos need each member to accept the license on huggingface.co with the
+# account whose token Tosun uses (`hf auth login`), otherwise the download fails with 403.
 #
-# gpus: GPUs per generation job. A 27B model in bf16 needs ~56 GB of weights plus KV cache: one 80 GB
-# card, or gpus: 2 (vLLM tensor parallelism is set from it). Check `sinfo -o "%N %G"` on Tosun.
-# chat_template_kwargs: thinking switched off where the template supports it (as in the reference);
-# DeepSeek-R1-Distill always reasons, and its <think> block is stripped before scoring.
+# cost_per_1k_tokens is the token proxy (cost.definition: token_proxy): parameters in billions
+# (every model here is dense), i.e. compute per token. It is not USD. DECISIONS.md #2 tracks whether
+# to switch to measured GPU time; every response records metadata.batch_seconds_per_sample.
+#
+# gpus: GPUs per generation job (vLLM tensor parallelism is set from it). bf16 weights take ~2 GB
+# per billion parameters plus KV cache: 24B+ models get 2 GPUs, phi-4 (15B) needs a >= 40 GB card.
+# Check `sinfo -p cuda -o "%N %G"` on Tosun and lower gpus to 1 on 80 GB cards.
+# engine_kwargs.max_model_len caps the KV cache: prompts are at most ~3k tokens (Multi-News) plus
+# max_new_tokens 4096; without the cap vLLM reserves memory for each model's full 32k-128k context.
+# chat_template_kwargs: SmolLM3 thinks by default and is switched off; DeepSeek-R1-Distill always
+# reasons, and its <think> block is stripped before scoring.
 models:
-  - name: qwen3-4b
-    model_id: Qwen/Qwen3-4B
-    revision: 1cfa9a7208912126459214e8b04321603b3df60c
+  # ---- small (3-4B) ----
+  - name: smollm3-3b
+    model_id: HuggingFaceTB/SmolLM3-3B
+    revision: a07cc9a04f16550a088caea529712d1d335b0ac1
     chat_template_kwargs: {enable_thinking: false}
-    cost_per_1k_tokens: 4.0
-  - name: gemma-4-e2b
-    model_id: google/gemma-4-E2B-it
-    revision: 3e22461f65e89153144f8adb70e3b8c2cc9845a7
-    chat_template_kwargs: {enable_thinking: false}
-    cost_per_1k_tokens: 2.0      # "effective 2B"; per-layer embeddings are lookups, not compute
-  - name: qwen3-8b
-    model_id: Qwen/Qwen3-8B
-    revision: b968826d9c46dd6066d109eabc6255188de91218
-    chat_template_kwargs: {enable_thinking: false}
-    cost_per_1k_tokens: 8.2
-  - name: gemma-4-e4b
-    model_id: google/gemma-4-E4B-it
-    revision: ee0ef6023621cff504d758262d4e04895a5af4a2
-    chat_template_kwargs: {enable_thinking: false}
-    cost_per_1k_tokens: 4.0
-  - name: cogito-v1-preview-llama-8b
-    model_id: deepcogito/cogito-v1-preview-llama-8B
-    revision: 64c42369b3f322fbffb277bfff146551dd2823cc
-    chat_template_kwargs: {enable_thinking: false}
-    cost_per_1k_tokens: 8.0
-  - name: deepseek-r1-distill-qwen-7b
-    model_id: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
-    revision: 916b56a44061fd5cd7d6a8fb632557ed4f724f60
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 3.1
+  - name: llama-3.2-3b
+    model_id: meta-llama/Llama-3.2-3B-Instruct      # gated
+    revision: 0cb88a4f764b7a12671c53f0838cd831a0843b95
     chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 3.2
+  - name: phi-4-mini
+    model_id: microsoft/Phi-4-mini-instruct
+    revision: cfbefacb99257ffa30c83adab238a50856ac3083
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 3.8
+  # ---- mid (7-8B) ----
+  - name: mistral-7b-v0.3
+    model_id: mistralai/Mistral-7B-Instruct-v0.3
+    revision: c170c708c41dac9275d15a8fff4eca08d52bab71
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 7.2
+  - name: olmo-3-7b
+    model_id: allenai/Olmo-3-7B-Instruct
+    revision: 6e5971d9eba42665f5bd5a0fcf047f299ce1dccc
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 7.3
+  - name: qwen2.5-7b
+    model_id: Qwen/Qwen2.5-7B-Instruct
+    revision: a09a35458c702b33eeacc393d103063234e8bc28
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
     cost_per_1k_tokens: 7.6
-  - name: granite-4.1-8b
-    model_id: ibm-granite/granite-4.1-8b
-    revision: 1504002f650e656a0a3789d99574df12e3e94ed0
-    chat_template_kwargs: {}     # the template ignores enable_thinking
-    cost_per_1k_tokens: 8.8
-  - name: qwen3.6-27b
-    model_id: Qwen/Qwen3.6-27B
-    revision: 6a9e13bd6fc8f0983b9b99948120bc37f49c13e9
-    chat_template_kwargs: {enable_thinking: false}
-    cost_per_1k_tokens: 27.8
+  - name: llama-3.1-8b
+    model_id: meta-llama/Llama-3.1-8B-Instruct      # gated
+    revision: 0e9e39f249a16976918f6564b8830bc894c89659
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 8.0
+  - name: deepseek-r1-distill-llama-8b
+    model_id: deepseek-ai/DeepSeek-R1-Distill-Llama-8B
+    revision: 6a6f4aa4197940add57724a7707d069478df56b1
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 8.0
+  # ---- large (15-33B) ----
+  - name: phi-4
+    model_id: microsoft/phi-4
+    revision: 2db69c1c3e91a05d2c64a3185acfbaf36f744e25
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}       # its full context
+    cost_per_1k_tokens: 14.7
+  - name: mistral-small-24b
+    model_id: mistralai/Mistral-Small-24B-Instruct-2501
+    revision: 9527884be6e5616bdd54de542f9ae13384489724
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 23.6
     gpus: 2
-  - name: gemma-4-26b-a4b
-    model_id: google/gemma-4-26B-A4B-it
-    revision: 4d7ae4984b7db7de8f8457170b3f1a419ee76d52
-    chat_template_kwargs: {enable_thinking: false}
-    cost_per_1k_tokens: 4.0      # mixture of experts: ~4B active parameters per token (26B in memory)
+  - name: gemma-3-27b
+    model_id: google/gemma-3-27b-it                 # gated; multimodal checkpoint, used text-only
+    revision: 005ad3404e59d6023443cb575daa05336842228a
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 27.4
+    gpus: 2
+  - name: qwen2.5-32b
+    model_id: Qwen/Qwen2.5-32B-Instruct
+    revision: 5ede1c97bbab6ce5cda5812749b4c0bdf79b18dd
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 32.8
     gpus: 2

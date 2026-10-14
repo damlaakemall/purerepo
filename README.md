@@ -6,7 +6,6 @@ Implementations of LLM **routing** papers, written to understand *what* each rou
 
 | paper | family | how it decides | code | explainer |
 |---|---|---|---|---|
-| [Hybrid LLM](https://arxiv.org/abs/2404.14618) (ICLR 2024) | binary | classifier predicts Pr[small model is good enough], threshold | [`routers/hybrid_llm`](llm_routing/routers/hybrid_llm/) | [docs](docs/papers/hybrid_llm.md) |
 | *quality regression* (RouterBench baseline) | multi-model | predict every model's quality, pick argmax(quality − λ·cost) | [`routers/baselines.py`](llm_routing/routers/baselines.py) | [docs](docs/comparison.md) |
 | *next paper…* | | | | |
 
@@ -32,9 +31,10 @@ llmr smoke-pipeline --output /tmp/llmr-shared-smoke  # test doubles only; no mod
 
 Everything runs on Sabancı's Tosun GPUs; no paid APIs. `configs/benchmarks/shared_v1.yaml`
 (GSM8K, MMLU-Pro, BBH, OlympiadBench, MBPP, Alpaca, Multi-News; k = 10) and
-`configs/model_pools/team.yaml` (the reference repo's 9 open-weight models) are pinned to
+`configs/model_pools/team.yaml` (12 open-weight models, 3B-33B, none shared with the reference repo) are pinned to
 HF commits. Ground truth uses the reference repo's audited evaluators. Planned routers:
-RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT (next to Hybrid LLM); the
+Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT, implemented by
+the team on the new data (the earlier Hybrid LLM implementation was removed); the
 release carries what each needs (per-sample cost, ArmoRM selector, latency), see the
 router contract.
 
@@ -70,9 +70,9 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 llmr routers                                                    # list available routers
-llmr train configs/experiments/hybrid_llm__synthetic.yaml       # seconds, no downloads
-llmr train configs/experiments/hybrid_llm__mixinstruct.yaml     # real data (downloads MixInstruct)
-llmr train configs/experiments/hybrid_llm__mixinstruct.yaml router.params.mode=det seed=1   # overrides
+llmr train configs/experiments/quality_regression__synthetic.yaml    # seconds, no downloads
+llmr train configs/experiments/quality_regression__routerbench.yaml  # real data (downloads RouterBench)
+llmr train configs/experiments/quality_regression__synthetic.yaml seed=1 router.params.alpha=0.5   # overrides
 llmr leaderboard
 pytest -q
 ```
@@ -82,8 +82,8 @@ pytest -q
 See [cluster/tosun/README.md](cluster/tosun/README.md): one-time setup, then
 
 ```bash
-bash cluster/tosun/submit_pipeline.sh configs/benchmarks/ours_v1.yaml --push    # build our benchmark
-bash cluster/tosun/submit_train.sh configs/experiments/hybrid_llm_deberta__ours_v1.yaml 3   # 3 seeds
+bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v1.yaml <model> <member> 4   # collect one model
+bash cluster/tosun/submit_train.sh configs/experiments/<router>__shared_v1.yaml 3              # 3 seeds
 ```
 
 ## Adding a router or benchmark
@@ -92,9 +92,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). In short: one folder in `llm_routing/rou
 
 ## Results so far
 
-Full table: [results/leaderboard.md](results/leaderboard.md). TF-IDF routers on CPU; paper-faithful DeBERTa runs on Tosun are next.
+Full table: [results/leaderboard.md](results/leaderboard.md). Paper routers come next, trained on `shared_v1`.
 
-| | |
-|---|---|
-| ![](results/plots/hybrid_llm_trans__mixinstruct.png) | ![](results/plots/quality_regression__routerbench.png) |
-| **Hybrid LLM** (alpaca-7B → vicuna-13B): 56% of queries to the small model at < 1% quality drop; matches vicuna's quality at 90% of its cost. | **Quality regression** on RouterBench (11 models): beats every single model except GPT-4 at a fraction of the cost, but is far below the oracle. There's a lot of room for better routers. |
+![](results/plots/quality_regression__routerbench.png)
+
+**Quality regression** on RouterBench (11 models): beats every single model except GPT-4 at a fraction of the cost, but is far below the oracle. There's a lot of room for better routers.

@@ -24,9 +24,9 @@ veya deney eğitimi değildir.
 ## 2. Koordinatör: benchmark'ı bir kez hazırla
 
 Ücretli API yok; her şey Tosun GPU'larında çalışır. `configs/benchmarks/shared_v1.yaml`
-(7 kaynak, 60/10/30 split, `k: 10`) ve `configs/model_pools/team.yaml` (9 açık ağırlıklı
-model) bütün dataset/model/ArmoRM revision'ları sabitlenmiş halde hazırdır. Maliyet
-`token_proxy`: aktif parametre sayısı × token; USD değildir (DECISIONS.md #2).
+(7 kaynak, 60/10/30 split, `k: 10`) ve `configs/model_pools/team.yaml` (referanstan farklı
+12 açık ağırlıklı model, 3B-33B) bütün dataset/model/ArmoRM revision'ları sabitlenmiş halde hazırdır. Maliyet
+`token_proxy`: parametre sayısı × token; USD değildir (DECISIONS.md #2).
 
 ```bash
 source cluster/tosun/config.sh && llmr_activate
@@ -46,16 +46,16 @@ olsun (ör. `n` değerleri küçük bir kopya config ile tek shard) ve `pip free
 bilgisini saklayın.
 
 ```bash
-bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v1.yaml qwen3-4b ibrahim 4
+bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v1.yaml smollm3-3b ibrahim 4
 ```
 
-Wrapper modelin `gpus` değerine göre GPU ister (27B ve 26B-A4B için 2), generation'dan
+Wrapper modelin `gpus` değerine göre GPU ister (24B, 27B ve 32B için 2; Llama ve Gemma için önce HF'de lisansı kabul edin), generation'dan
 sonra CPU ground-truth ve GPU ArmoRM skorlamasını paralel, ardından paketlemeyi submit
 eder; router training submit etmez. `LLMR_BATCH_SIZE` vLLM'e tek seferde giden istek
 sayısıdır (varsayılan 256). Elle çalıştırmak isterseniz her shard için aynı dört argüman:
 
 ```bash
-CFG=configs/benchmarks/shared_v1.yaml; MODEL=qwen3-4b; MEMBER=ibrahim
+CFG=configs/benchmarks/shared_v1.yaml; MODEL=smollm3-3b; MEMBER=ibrahim
 llmr generate "$CFG" --model "$MODEL" --member "$MEMBER" --num-shards 4 --shard-index 0 --max-retries 2 --batch-size 256
 llmr score "$CFG" --model "$MODEL" --member "$MEMBER" --num-shards 4 --shard-index 0 --scorer ground_truth
 llmr score "$CFG" --model "$MODEL" --member "$MEMBER" --num-shards 4 --shard-index 0 --scorer armorm
@@ -111,8 +111,8 @@ benchmark release'i için `push-data` yalnız frozen içeriği yükler.
 
 [Router sözleşmesi](router_contract.md) ve [paper şablonu](papers/_template.md) ile
 her makale için önce label → architecture → loss → train → inference protokolünü
-çıkarın; paper/released code farklarını kaydedin. Planlanan router'lar: Hybrid LLM
-(hazır), RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT. Her birinin
+çıkarın; paper/released code farklarını kaydedin. Planlanan router'lar: Hybrid LLM,
+RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT. Her birinin
 release'ten ne aldığı router sözleşmesindeki tabloda.
 
 Mevcut bir router'ı ortak veri üzerinde ileride çalıştırırken experiment config'inde

@@ -61,7 +61,6 @@ def test_aiq_constant_curve():
 
 
 @pytest.mark.parametrize("cfg", [
-    {"type": "hybrid_llm", "models": {"small": "small", "large": "large"}, "params": {"mode": "prob"}},
     {"type": "quality_regression", "models": None},
     {"type": "random_binary", "models": {"small": "tiny", "large": "large"}},
 ])
@@ -81,7 +80,7 @@ def test_every_router_produces_valid_decisions(cfg, bench):
 
 
 def test_registry_lists_routers():
-    assert {"hybrid_llm", "oracle", "quality_regression", "random_binary"} <= set(list_routers())
+    assert {"oracle", "quality_regression", "random_binary"} <= set(list_routers())
 
 
 def test_experiment_configs_load():
@@ -94,11 +93,11 @@ def test_experiment_configs_load():
 def test_end_to_end_run(tmp_path):
     from llm_routing.runner import run_experiment
     cfg = load_experiment(os.path.join(os.path.dirname(__file__), "..", "configs", "experiments",
-                                       "hybrid_llm__synthetic.yaml"),
+                                       "quality_regression__synthetic.yaml"),
                           [f"output_dir={tmp_path}/runs", f"benchmark.path={tmp_path}/bench", "benchmark.params.n=800"])
     rec = run_experiment(cfg)
     assert os.path.exists(os.path.join(rec["run_dir"], "metrics.json"))
-    assert {r["router"] for r in rec["results"]} >= {"hybrid_llm/r_trans", "random", "oracle"}
+    assert {r["router"] for r in rec["results"]} >= {"quality_regression", "oracle"}
 
 
 def test_scorers():

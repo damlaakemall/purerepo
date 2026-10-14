@@ -19,15 +19,10 @@ One row per router. Fill in a row when you add a paper. Numbers live in the [lea
 
 | router | decision time | candidates | learns | labels from | uses k samples | router model | knob | overhead |
 |---|---|---|---|---|---|---|---|---|
-| **Hybrid LLM** r_det | before generation | 2 | Pr[small ≥ large] | BARTScore, 1 sample | no | DeBERTa-v3-large / TF-IDF+LR | threshold τ | 1 encoder pass |
-| **Hybrid LLM** r_prob | before generation | 2 | Pr[H(x) ≥ 0], soft | BARTScore, k samples | **yes** | same | τ | same |
-| **Hybrid LLM** r_trans | before generation | 2 | Pr[H(x) ≥ −t*], soft, relaxed against class imbalance | BARTScore, k samples | **yes** | same | τ | same |
 | quality regression *(baseline)* | before generation | N | each model's quality | benchmark scores | mean over k | TF-IDF + ridge per model | λ | 1 linear pass |
 | random *(baseline)* | before generation | 2 | – | – | – | – | mix ratio | none |
 | oracle *(reference)* | after all answers (cheats) | N | – | test scores | – | – | λ | – |
 
 ## Observations so far
 
-- **Model gap matters more than the router.** On MixInstruct, alpaca-7B → vicuna-13B (close models) lets a router send about 55% of traffic to the small model at under 1% quality loss. flan-t5-xxl → vicuna-13B (far apart) allows only about 5%. See [hybrid_llm.md](papers/hybrid_llm.md#7-our-results-tf-idf-router-cpu).
-- **Soft labels help** when k > 1 (r_prob and r_trans beat r_det on synthetic data with k = 10). With k = 1 benchmarks (MixInstruct, RouterBench), r_prob ≡ r_det. This is one reason we build `ours_v1` with k = 10.
 - **There is a large gap to the oracle** everywhere. On RouterBench the TF-IDF quality regressor reaches AIQ 0.72 against the oracle's 0.91, so better query representations are the obvious next lever.

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Train + evaluate one experiment. Extra args are config overrides. Use an array for seeds:
-#   sbatch --array=0-2 cluster/tosun/jobs/train.sbatch configs/experiments/hybrid_llm_deberta__ours_v1.yaml
+#   sbatch --array=0-2 cluster/tosun/jobs/train.sbatch configs/experiments/<router>__shared_v1.yaml
 #SBATCH --job-name=llmr-train
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8

@@ -64,7 +64,7 @@ def load_mixinstruct(models: list[str] | None = None, metric: str = "bartscore",
 
 def load_mixinstruct_pair(small_model: str, large_model: str, split: str = "train",
                           max_examples: int | None = None, metric: str = "bartscore"):
-    """Backward-compatible binary loader (RoutingDataset) used by scripts/run_hybrid_llm.py."""
+    """Binary small/large view of MixInstruct (RoutingDataset), for two-model routers."""
     ours = {"train": "train", "validation": "val", "test": "test"}.get(split, split)
     cap = max_examples or 10**9
     b = load_mixinstruct([small_model, large_model], metric,
