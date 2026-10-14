@@ -6,6 +6,16 @@ set -euo pipefail
 source "$(dirname "$0")/config.sh"
 llmr_activate
 CFG="$1"; PUSH="${2:-}"
+PROTOCOL=$(python - "$CFG" <<'PYCFG'
+import sys
+from llm_routing.config import load_benchmark_config
+print(load_benchmark_config(sys.argv[1]).get("protocol", "legacy"))
+PYCFG
+)
+if [ "$PROTOCOL" = shared-v1 ]; then
+    echo "For member collection use submit_member.sh; freeze/merge separately with llmr assemble." >&2
+    exit 1
+fi
 N=$(python -c "from llm_routing.config import load_benchmark_config as l; print(len(l('$CFG')['models']))")
 mkdir -p logs
 [ -f "$(python -c "from llm_routing.config import load_benchmark_config as l; print(l('$CFG')['path'])")/queries.jsonl" ] || llmr build-queries "$CFG"

@@ -48,6 +48,9 @@ def _read_queries(path: str) -> list[dict]:
 
 
 def build_queries(cfg: dict) -> None:
+    if cfg.get("protocol") == "shared-v1":
+        from .shared.dataset import build_queries as shared_build
+        return shared_build(cfg)
     from datasets import load_dataset
 
     rows = []
@@ -77,7 +80,12 @@ def _model_cfg(cfg: dict, name: str) -> dict:
     raise KeyError(f"model {name!r} not in config; available: {[m['name'] for m in cfg['models']]}")
 
 
-def generate(cfg: dict, model: str) -> None:
+def generate(cfg: dict, model: str, **job_options) -> None:
+    if cfg.get("protocol") == "shared-v1":
+        from .shared.collect import generate as shared_generate
+        return shared_generate(cfg, model, **job_options)
+    if job_options:
+        raise ValueError("member/shard options require protocol: shared-v1")
     m = _model_cfg(cfg, model)
     g = dict(cfg.get("generation", {}))
     g.update(m.get("generation", {}))
@@ -86,7 +94,12 @@ def generate(cfg: dict, model: str) -> None:
                        seed=cfg.get("seed", 0), **g)
 
 
-def score(cfg: dict, model: str) -> None:
+def score(cfg: dict, model: str, **job_options) -> None:
+    if cfg.get("protocol") == "shared-v1":
+        from .shared.collect import score as shared_score
+        return shared_score(cfg, model, **job_options)
+    if job_options:
+        raise ValueError("separate scorer/member/shard options require protocol: shared-v1")
     m = _model_cfg(cfg, model)
     rows = _read_queries(cfg["path"])
     by_id = {}
@@ -116,6 +129,9 @@ def score(cfg: dict, model: str) -> None:
 
 
 def assemble(cfg: dict) -> Benchmark:
+    if cfg.get("protocol") == "shared-v1":
+        from .shared.assemble import assemble as shared_assemble
+        return shared_assemble(cfg)
     rows = _read_queries(cfg["path"])
     names = [m["name"] for m in cfg["models"]]
     S, C = [], []

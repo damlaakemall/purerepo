@@ -15,3 +15,6 @@ jobs:
       - run: pytest -q
       - name: smoke test (synthetic benchmark, CPU)
         run: llmr train configs/experiments/hybrid_llm__synthetic.yaml output_dir=/tmp/runs benchmark.path=/tmp/bench
+
+      - name: shared collection smoke (test doubles, no training or model downloads)
+        run: llmr smoke-pipeline --output /tmp/shared-smoke

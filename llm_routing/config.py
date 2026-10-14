@@ -48,11 +48,22 @@ def load_experiment(path: str, cli_overrides: list[str] | None = None) -> dict:
     cfg.setdefault("baselines", [])
     cfg.setdefault("wandb", {"enabled": False})
     cfg.setdefault("output_dir", "runs")
-    return OmegaConf.to_container(cfg, resolve=True)
+    return _with_model_pool(OmegaConf.to_container(cfg, resolve=True))
 
 
 def load_benchmark_config(path: str, cli_overrides: list[str] | None = None) -> dict:
     cfg = load_yaml(path)
     if cli_overrides:
         cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(cli_overrides))
-    return OmegaConf.to_container(cfg, resolve=True)
+    return _with_model_pool(OmegaConf.to_container(cfg, resolve=True))
+
+
+def _with_model_pool(cfg):
+    """Allow a shared YAML model pool without changing existing inline configs."""
+    benchmark = cfg.get("benchmark", cfg)
+    if isinstance(benchmark, dict) and benchmark.get("model_pool"):
+        if "models" in benchmark:
+            raise ValueError("use model_pool or inline models, not both")
+        pool = OmegaConf.to_container(load_yaml(benchmark["model_pool"]), resolve=True)
+        benchmark["models"] = pool["models"]
+    return cfg

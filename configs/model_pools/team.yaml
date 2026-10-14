@@ -1,0 +1,25 @@
+# Draft pool derived from ours_v1. Pin revisions and agree prices before collection.
+# Keep names fixed once a dataset release has results. No credentials in this file.
+models:
+  - name: qwen2.5-0.5b
+    model_id: Qwen/Qwen2.5-0.5B-Instruct
+    revision: PIN_MODEL_COMMIT
+    chat_template_kwargs: {}
+    cost_per_1k_tokens: 0.5
+  - name: qwen2.5-1.5b
+    model_id: Qwen/Qwen2.5-1.5B-Instruct
+    revision: PIN_MODEL_COMMIT
+    chat_template_kwargs: {}
+    cost_per_1k_tokens: 1.5
+# API example (OpenAI-compatible endpoint; choose a model and agreed price):
+# - name: hosted-model
+#   model_id: provider/model
+#   generation: {engine: api, k: 1}
+#   api:
+#     key_env: TEAM_API_KEY
+#     base_url_env: TEAM_API_BASE_URL
+#     supports_seed: false
+#     max_tokens_field: max_tokens
+#     request_kwargs: {}
+#   cost_per_1k_tokens: <explicit proxy, or use pricing with cost.definition=usd_tokens>
+#   pricing: {input_per_1m: <verified rate>, output_per_1m: <verified rate>}

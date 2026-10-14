@@ -1,0 +1,27 @@
+# Test doubles only, invoked by `llmr smoke-pipeline`; no downloads/GPU/API.
+protocol: shared-v1
+synthetic: true
+name: shared_smoke
+version: smoke-v1
+loader: generated
+path: data/benchmarks/shared_smoke
+seed: 42
+splits: {train: 0.6, val: 0.2, test: 0.2}
+quality_metric: ground_truth
+allow_partial: false
+required_scores: [ground_truth, armorm]
+sources:
+  - name: arithmetic
+    local_path: tests/fixtures/shared_queries.jsonl
+    n: 30
+    query_template: "{question}"
+    reference_field: answer
+    ground_truth_scorer: exact_match_number
+models:
+  - {name: tiny, model_id: synthetic/tiny, generation: {k: 3}, cost_per_1k_tokens: 1.0}
+  - {name: large, model_id: synthetic/large, generation: {k: 1}, cost_per_1k_tokens: 3.0}
+generation: {engine: hf, k: 1, temperature: 0.7, top_p: 0.95, max_new_tokens: 16}
+scoring:
+  ground_truth: {text_policy: strip_think}
+  armorm: {model_id: synthetic-evaluator-test-double, revision: test-fixture-v1, text_policy: strip_think}
+cost: {definition: token_proxy, note: "synthetic test units, not monetary cost"}

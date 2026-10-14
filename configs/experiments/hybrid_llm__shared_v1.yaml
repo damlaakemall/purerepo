@@ -1,0 +1,10 @@
+# Example for AFTER the shared release exists; not run by collection or smoke.
+# TF-IDF variant is an educational baseline, not a claim of paper-faithful training.
+name: hybrid_llm_shared_gt
+seed: 42
+benchmark: configs/benchmarks/shared_v1.yaml
+router: configs/routers/hybrid_llm.yaml
+overrides:
+  router: {models: {small: qwen2.5-0.5b, large: qwen2.5-1.5b}}
+baselines: [random_binary, oracle]
+wandb: {enabled: false, project: llm-routing}

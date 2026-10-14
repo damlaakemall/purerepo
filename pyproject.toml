@@ -10,12 +10,14 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "numpy", "scipy", "scikit-learn", "pandas", "matplotlib",
-  "omegaconf>=2.3", "datasets", "huggingface_hub",
+  "omegaconf>=2.3", "datasets", "huggingface_hub", "pyarrow",
 ]
 
 [project.optional-dependencies]
 gpu = ["torch", "transformers", "sentencepiece", "protobuf", "accelerate"]
 tracking = ["wandb"]
+api = ["openai"]
+vllm = ["vllm"]
 dev = ["pytest"]
 
 [project.scripts]

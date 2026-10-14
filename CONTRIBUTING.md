@@ -33,3 +33,11 @@
 
 - Work on a branch, open a PR, and wait for CI (tests plus a CPU smoke run) to pass before merging into `main`.
 - Commit `results/leaderboard.md` and selected plots. Don't commit `runs/`, `data/` or `wandb/`; they're git-ignored.
+
+## Shared collection and future papers
+
+Use [the team workflow](docs/team_workflow.md) for member contributions and
+[the router contract](docs/router_contract.md) for paper-native labels, architecture,
+loss and inference. Shared artifacts never contain a universal router label.
+`Decision.sample_index` identifies the returned sample; `Decision.cost` includes all
+paid calls. Run `llmr smoke-pipeline --output /tmp/llmr-shared-check` before submitting.

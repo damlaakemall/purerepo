@@ -1,26 +1,48 @@
-"""Share frozen benchmarks through the Hugging Face Hub so every machine uses identical data.
-
-    llmr push-data configs/benchmarks/ours_v1.yaml     # after `assemble`, from the cluster
-    llmr pull-data configs/benchmarks/ours_v1.yaml     # anywhere else
-
-Needs `huggingface-cli login` (token with write access) once per machine, and
-``hub_repo: <user-or-org>/<name>`` in the benchmark config. Repos are created private.
-"""
-
+"""Share validated artifacts. Shared releases should be downloaded at a fixed Hub commit."""
 from __future__ import annotations
 
+import json
+import tempfile
+from pathlib import Path
 
-def push(path: str, repo_id: str, private: bool = True, message: str = "update benchmark") -> None:
+
+def _validate(path):
+    path = Path(path)
+    man = json.loads((path / "manifest.json").read_text())
+    if man.get("protocol") == "shared-v1":
+        if (path / "long.parquet").exists():
+            from ..pipeline.shared.assemble import validate_release
+            validate_release(path)
+        else:
+            from ..pipeline.shared.io import verify
+            verify(path, ("run.json", "responses.jsonl"))
+    else:
+        from .benchmark import Benchmark
+        Benchmark.load(str(path))
+
+
+def push(path: str, repo_id: str, private: bool = True, message: str = "publish benchmark"):
     from huggingface_hub import HfApi
-
+    if not repo_id:
+        raise ValueError("set hub_repo to a team dataset repository")
+    _validate(path)
     api = HfApi()
     api.create_repo(repo_id, repo_type="dataset", private=private, exist_ok=True)
-    api.upload_folder(folder_path=path, repo_id=repo_id, repo_type="dataset", commit_message=message)
-    print(f"[hub] pushed {path} -> https://huggingface.co/datasets/{repo_id}")
+    commit = api.upload_folder(folder_path=path, repo_id=repo_id, repo_type="dataset", commit_message=message,
+                               ignore_patterns=[".cache/**", "*.lock"])
+    print(f"[hub] pushed {path} -> https://huggingface.co/datasets/{repo_id}; pin hub_revision={commit.oid}")
+    return commit.oid
 
 
 def pull(repo_id: str, path: str, revision: str | None = None) -> None:
     from huggingface_hub import snapshot_download
-
-    snapshot_download(repo_id, repo_type="dataset", local_dir=path, revision=revision)
-    print(f"[hub] pulled {repo_id} -> {path}")
+    target = Path(path)
+    if target.exists():
+        raise ValueError(f"refusing to overwrite existing data: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=target.parent) as tmp:
+        tmp = Path(tmp)
+        snapshot_download(repo_id, repo_type="dataset", local_dir=tmp, revision=revision)
+        _validate(tmp)
+        tmp.rename(target)
+    print(f"[hub] pulled verified artifact {repo_id}@{revision} -> {path}")

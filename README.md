@@ -14,6 +14,27 @@ Implementations of LLM **routing** papers, written to understand *what* each rou
 
 **Start here:** [routing fundamentals](docs/routing_fundamentals.md) → [how routers are compared](docs/comparison.md) → [benchmarks & fairness rules](docs/benchmarks.md) → [metrics](docs/evaluation.md) → [current leaderboard](results/leaderboard.md).
 
+## Team collection protocol
+
+We are building the team's own version of LLM-Routing-Project. Existing routers and
+benchmark configurations remain available. The new `shared-v1` pipeline adds frozen
+query IDs/splits, independent member/model shards, sample-level resume/retry,
+separate ground-truth and offline ArmoRM scoring, validated contribution bundles,
+and immutable long/wide releases with hashes and per-metric benchmark views.
+
+Start with the [team guide (Türkçe)](docs/team_workflow.md),
+[technical data protocol](docs/shared_protocol.md), and
+[router extension contract](docs/router_contract.md).
+
+```bash
+llmr smoke-pipeline --output /tmp/llmr-shared-smoke  # test doubles only; no models or training
+```
+
+`configs/benchmarks/shared_v1.yaml` and `configs/model_pools/team.yaml` are explicit
+drafts: agree the pool/cost definition and pin the `PIN_*` revisions before real
+collection. RouteLLM, GraphRouter, UniRoute, BEST-Route, MixLLM and PILOT are future
+paper implementations, not new routers delivered by this change.
+
 ## How it fits together
 
 ```

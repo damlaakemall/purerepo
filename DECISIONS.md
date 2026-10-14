@@ -22,3 +22,11 @@ A log of team decisions that shape the comparison. **Check "Open" before the fir
 | 2026-10-13 | YAML configs + Weights & Biases for tracking; local run files are always written too. | Reproducible runs, easy team comparison. |
 | 2026-10-13 | Cluster: Sabancı Tosun (SLURM). | School-provided GPUs. |
 | 2026-10-13 | `ours_v1` query mix: open-ended instructions (MixInstruct, BARTScore) + GSM8K (exact match) + MMLU (multiple choice). | Covers both open-ended and verifiable tasks; see open item 3 for the scale issue. |
+
+## Shared-v1 working protocol (2026-10-14)
+
+A separate `shared_v1` draft adds member collection and immutable releases; existing
+benchmark configs and results remain unchanged. GT and ArmoRM are separate channels;
+missing gold stays null. New paper routers are deferred. Pool, dataset/model/evaluator
+commit revisions, Tosun settings, private Hub repository and USD-vs-proxy pricing
+remain team decisions before real collection. See [team workflow](docs/team_workflow.md).

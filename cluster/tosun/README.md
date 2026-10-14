@@ -58,3 +58,10 @@ llmr leaderboard            # -> results/leaderboard.md, commit it
 ```bash
 srun --partition=<gpu_partition> --gres=gpu:1 --mem=32G --time=01:00:00 --pty bash
 ```
+
+## Independent shared-v1 member jobs
+
+For the new protocol use `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` after
+freezing/sharing the dataset. It submits generation, separate GT/ArmoRM scoring, and
+packaging; it never submits router training. The older `submit_pipeline.sh` continues
+to serve the original ours_v1/ours_dev configs. See [team workflow](../../docs/team_workflow.md).

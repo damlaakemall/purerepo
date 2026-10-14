@@ -31,7 +31,8 @@ import numpy as np
 def deterministic_labels(small_scores: np.ndarray, large_scores: np.ndarray) -> np.ndarray:
     """y_i = 1[ q(S(x_i)) >= q(L(x_i)) ] using the first sample of each model."""
     s, l = np.atleast_2d(small_scores), np.atleast_2d(large_scores)
-    return (s[:, 0] >= l[:, 0]).astype(float)
+    valid = np.isfinite(s[:, 0]) & np.isfinite(l[:, 0])
+    return np.where(valid, (s[:, 0] >= l[:, 0]).astype(float), np.nan)
 
 
 def gap_probability(small_scores: np.ndarray, large_scores: np.ndarray, t: float = 0.0,
@@ -47,10 +48,16 @@ def gap_probability(small_scores: np.ndarray, large_scores: np.ndarray, t: float
     s, l = np.atleast_2d(small_scores), np.atleast_2d(large_scores)
     if estimator == "all_pairs":
         diff = s[:, :, None] - l[:, None, :]  # (N, k_s, k_l)
-        return (diff >= -t).mean(axis=(1, 2))
+        valid = np.isfinite(s[:, :, None]) & np.isfinite(l[:, None, :])
+        count = valid.sum(axis=(1, 2))
+        return np.divide(((diff >= -t) & valid).sum(axis=(1, 2)), count,
+                         out=np.full(len(s), np.nan), where=count > 0)
     if estimator == "paired":
         k = min(s.shape[1], l.shape[1])
-        return (s[:, :k] - l[:, :k] >= -t).mean(axis=1)
+        valid = np.isfinite(s[:, :k]) & np.isfinite(l[:, :k])
+        count = valid.sum(axis=1)
+        return np.divide(((s[:, :k] - l[:, :k] >= -t) & valid).sum(axis=1), count,
+                         out=np.full(len(s), np.nan), where=count > 0)
     raise ValueError(estimator)
 
 
@@ -75,7 +82,9 @@ def label_spread(y: np.ndarray) -> float:
 def find_relaxation(small_scores, large_scores, num_grid: int = 200, estimator: str = "all_pairs"):
     """Grid-search t* >= 0 maximising label spread. Returns (t_star, ts, spreads)."""
     s, l = np.atleast_2d(small_scores), np.atleast_2d(large_scores)
-    max_gap = float(np.max(l[:, :, None] - s[:, None, :]))
+    if not (np.isfinite(s).any(axis=1) & np.isfinite(l).any(axis=1)).all():
+        raise ValueError("each training query needs at least one score from each model")
+    max_gap = float(np.nanmax(l[:, :, None] - s[:, None, :]))
     hi = max(max_gap, 1e-6)
     ts = np.linspace(0.0, hi, num_grid)
     spreads = np.array([label_spread(gap_probability(s, l, t, estimator)) for t in ts])

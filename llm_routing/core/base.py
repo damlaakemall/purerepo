@@ -39,7 +39,9 @@ if TYPE_CHECKING:  # type hints only; avoids a core <-> data import cycle
 class Decision:
     knob: float
     choice: np.ndarray  # (N,) int
-    cost: np.ndarray  # (N,) float
+    cost: np.ndarray  # (N,) float: all generation + selector + escalation costs paid
+    sample_index: np.ndarray | None = None  # returned sample per query (default: sample 0)
+    trace: list[dict] | None = None  # optional paid calls/feedback events, for future online methods
 
 
 class Router(ABC):

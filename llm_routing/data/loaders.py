@@ -40,6 +40,10 @@ def prepare(cfg: dict) -> Benchmark:
 
 def load_benchmark(cfg: dict, with_responses: bool = False, rebuild: bool = False) -> Benchmark:
     path = cfg["path"]
+    if cfg.get("protocol") == "shared-v1":
+        from ..pipeline.shared.assemble import load_view
+        # Training never assembles, downloads, or regenerates a shared release.
+        return load_view(cfg, with_responses)
     if not rebuild and os.path.exists(os.path.join(path, "manifest.json")):
         return Benchmark.load(path, with_responses)
     if not rebuild and cfg.get("hub_repo"):

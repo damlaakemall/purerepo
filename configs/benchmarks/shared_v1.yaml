@@ -1,0 +1,50 @@
+# New shared protocol; existing ours_v1, ours_dev and public benchmarks stay intact.
+protocol: shared-v1
+name: shared_v1
+version: v1
+loader: generated
+path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/shared_v1
+hub_repo: null
+hub_revision: null
+seed: 42
+splits: {train: 0.8, val: 0.1, test: 0.1}
+model_pool: configs/model_pools/team.yaml
+quality_metric: ground_truth
+allow_partial: false
+required_scores: [ground_truth, armorm]
+sources:
+  - name: gsm8k
+    hf_id: openai/gsm8k
+    hf_config: main
+    hf_split: train
+    revision: PIN_DATASET_COMMIT
+    n: 2000
+    query_template: "{question}\nSolve step by step, then give the final answer after '####'."
+    reference_field: answer
+    ground_truth_scorer: exact_match_number
+  - name: mmlu
+    hf_id: cais/mmlu
+    hf_config: all
+    hf_split: test
+    revision: PIN_DATASET_COMMIT
+    n: 2000
+    formatter: mmlu
+    ground_truth_scorer: multiple_choice
+# Add open-ended sources with ground_truth_scorer: null; ArmoRM still scores them.
+generation:
+  engine: vllm             # hf or api are also supported
+  k: 3                    # a model may override k under its generation mapping
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 512
+scoring:
+  ground_truth: {text_policy: strip_think}
+  armorm:
+    model_id: RLHFlow/ArmoRM-Llama3-8B-v0.1
+    revision: PIN_ARMORM_COMMIT
+    device_map: auto
+    text_policy: strip_think
+cost:
+  definition: token_proxy  # explicitly a proxy, NOT USD; no invented prices
+  snapshot_date: "2026-10-14"
+  note: "Draft parameter-count proxy inherited from ours_v1; team must agree before publication."
