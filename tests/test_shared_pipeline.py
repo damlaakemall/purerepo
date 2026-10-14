@@ -246,7 +246,7 @@ def test_cli_dotlist_after_options_and_model_pool(cfg, monkeypatch):
     from llm_routing.pipeline import build
     captured = []
     monkeypatch.setattr(build, "generate", lambda c, m, **kw: captured.append((c, m, kw)))
-    main(["generate", "configs/benchmarks/shared_v1.yaml", "--model", "qwen2.5-0.5b", "--member", "alice", "generation.k=2"])
+    main(["generate", "configs/benchmarks/shared_v1.yaml", "--model", "qwen3-4b", "--member", "alice", "generation.k=2"])
     c, m, kw = captured[0]
     assert c["generation"]["k"] == 2 and c["models"][0]["name"] == m and kw["member"] == "alice"
 
@@ -290,7 +290,7 @@ def test_partial_release_preserves_failure_and_null_cost(cfg):
 def test_unavailable_gold_stays_null(cfg, tmp_path):
     cfg = copy.deepcopy(cfg)
     cfg["path"] = str(tmp_path / "no-gold")
-    cfg["sources"][0]["ground_truth_scorer"] = None
+    cfg["sources"][0]["answer_type"] = None
     build_queries(cfg)
     collect(cfg)
     gt = assemble(cfg)
@@ -317,3 +317,50 @@ def test_release_can_move_to_another_storage_root(smoke, tmp_path):
     target.parent.mkdir(parents=True)
     shutil.copytree(frozen_dir(cfg), target)
     assert load_benchmark(cfg).fingerprint() == load_benchmark(moved).fingerprint()
+
+
+def test_views_carry_per_sample_extras_for_best_of_n_and_latency(smoke):
+    cfg, _ = smoke
+    gt = load_benchmark(cfg)
+    rm = load_benchmark({**cfg, "quality_metric": "armorm"})
+    assert set(gt.extras) == {"sample_cost", "completion_tokens", "seconds", "armorm"}
+    assert set(rm.extras) == {"sample_cost", "completion_tokens", "seconds", "ground_truth"}
+    # the other channel is the selector: ArmoRM in the GT view is the ArmoRM view's scores, and back
+    assert np.allclose(gt.extras["armorm"], rm.scores, equal_nan=True)
+    assert np.allclose(rm.extras["ground_truth"], gt.scores, equal_nan=True)
+    # realized cost of every sample; sample 0 is the cost the single-response evaluation charges
+    assert np.allclose(gt.extras["sample_cost"][:, :, 0], gt.costs, equal_nan=True)
+    assert np.isnan(gt.extras["sample_cost"][:, 1, 1:]).all()  # ragged padding stays missing
+    sub = gt.select_models(["tiny"]).split("test")
+    assert sub.extras["sample_cost"].shape == sub.scores.shape
+
+
+def test_tampered_extra_is_detected(smoke, tmp_path):
+    cfg, _ = smoke
+    view = tmp_path / "view"
+    shutil.copytree(frozen_dir(cfg) / "views" / "ground_truth", view)
+    a = np.load(view / "extras" / "sample_cost.npy"); a[0, 0, 0] += 1
+    np.save(view / "extras" / "sample_cost.npy", a)
+    with pytest.raises(ValueError):
+        Benchmark.load(str(view))
+
+
+def test_batched_backend_retries_only_failed_samples(cfg):
+    calls = []
+
+    class Batched:
+        def generate_batch(self, items):
+            calls.append(len(items))
+            out = []
+            for query, seed in items:
+                if len(calls) == 1 and seed % 2:
+                    out.append(RuntimeError("transient"))
+                else:
+                    out.append(fake(query, seed))
+            return out
+
+    path = generate(cfg, "tiny", backend=Batched(), retry_delay=0, batch_size=4)
+    rows = read_jsonl(path / "responses.jsonl")
+    failed = sum(not r["success"] for r in rows)
+    assert failed and calls[0] == 4 and calls[1] == failed  # the retry re-sends the failed requests only
+    assert sum(r["success"] for r in rows) == 5 * 2

@@ -35,6 +35,7 @@ def main(argv=None):
         if name == "generate":
             s.add_argument("--max-retries", type=int)
             s.add_argument("--retry-delay", type=float)
+            s.add_argument("--batch-size", type=int, help="requests per vLLM call (throughput only)")
     lb = sub.add_parser("leaderboard"); lb.add_argument("--runs", default="runs")
     lb.add_argument("--out", default="results/leaderboard.md")
     sub.add_parser("routers")
@@ -88,7 +89,7 @@ def main(argv=None):
         elif a.cmd == "generate":
             from .pipeline.build import generate
 
-            options = {k: getattr(a, k) for k in ("member", "shard_index", "num_shards", "max_retries", "retry_delay") if getattr(a, k) is not None}
+            options = {k: getattr(a, k) for k in ("member", "shard_index", "num_shards", "max_retries", "retry_delay", "batch_size") if getattr(a, k) is not None}
             generate(cfg, a.model, **options)
         elif a.cmd == "score":
             from .pipeline.build import score

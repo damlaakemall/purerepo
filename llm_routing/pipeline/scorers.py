@@ -7,11 +7,13 @@ a known answer, BARTScore for open-ended instructions (as in Hybrid LLM).
 bartscore      mean log-likelihood of the reference given the response under BART
                (Yuan et al., 2021). Negative; closer to 0 = better. Used by Hybrid LLM.
 exact_match_number
-               1.0 if the last number in the response equals the reference's final
-               number (GSM8K-style "#### 42"), else 0.0.
+               GSM8K: the hardened numeric evaluator of ``ground_truth`` (explicit "Final Answer",
+               "Answer: 42", \\boxed{42}, "#### 42", then the last number) against the
+               reference's "#### <n>" answer.
 multiple_choice
-               1.0 if the first standalone option letter (A-E) in the response equals
-               the reference letter.
+               the hardened MCQ evaluator of ``ground_truth``: an explicit "Answer: X" conclusion,
+               then the decorated last line / prose patterns. (A first-letter regex would read
+               "A cache is ..." as option A.)
 
 Later papers use LLM-as-judge or human preference labels; add them here with
 ``@register_scorer``.
@@ -19,7 +21,6 @@ Later papers use LLM-as-judge or human preference labels; add them here with
 
 from __future__ import annotations
 
-import re
 
 import numpy as np
 
@@ -78,41 +79,21 @@ def _bartscore(**kw):
     return BARTScorer(**kw)
 
 
-_NUM = re.compile(r"-?\d[\d,]*\.?\d*")
-
-
-def _last_number(s: str):
-    if "####" in s:
-        s = s.split("####")[-1]
-    nums = _NUM.findall(s or "")
-    if not nums:
-        return None
-    try:
-        return float(nums[-1].replace(",", "").rstrip("."))
-    except ValueError:
-        return None
-
-
 @register_scorer("exact_match_number")
 def _exact_number(**_):
+    from .ground_truth.evaluators import _gsm8k_strict
+    from .ground_truth.metrics import extract_gsm8k_answer
+
     def score(responses, references):
-        out = []
-        for r, ref in zip(responses, references):
-            a, b = _last_number(r), _last_number(ref)
-            out.append(float(a is not None and b is not None and abs(a - b) < 1e-6))
-        return np.array(out)
+        return np.array([float(_gsm8k_strict(r or "", extract_gsm8k_answer(ref) or "")[0]) for r, ref in zip(responses, references)])
     return score
-
-
-_LETTER = re.compile(r"\b([A-E])\b")
 
 
 @register_scorer("multiple_choice")
 def _multiple_choice(**_):
+    from .ground_truth import evaluate
+
     def score(responses, references):
-        out = []
-        for r, ref in zip(responses, references):
-            m = _LETTER.search(r or "")
-            out.append(float(m is not None and m.group(1) == ref.strip()[:1].upper()))
-        return np.array(out)
+        return np.array([evaluate("mcq", r or "", ref.strip()[:1].upper(), answer_type="mcq_letter").score
+                         for r, ref in zip(responses, references)])
     return score

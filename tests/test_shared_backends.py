@@ -1,4 +1,4 @@
-"""Backend request/formatting tests with SDK doubles; never load an actual LLM."""
+"""Backend request/formatting tests with vLLM doubles; never load an actual LLM."""
 import sys
 from types import SimpleNamespace
 
@@ -19,54 +19,53 @@ class Tokenizer:
         return [1, 2, 3]
 
 
-def test_vllm_template_and_seed(monkeypatch):
-    calls = []
+def _fake_vllm(monkeypatch, calls, seen):
     class LLM:
         def __init__(self, **kwargs):
             calls.append(kwargs)
         def get_tokenizer(self):
             return Tokenizer()
         def generate(self, prompts, params, use_tqdm):
-            assert prompts == [{"prompt_token_ids": [1, 2, 3]}]
-            assert params.seed == 77 and params.n == 1
-            return [SimpleNamespace(outputs=[SimpleNamespace(text="answer", token_ids=[4, 5], finish_reason="stop")])]
+            assert all(p == {"prompt_token_ids": [1, 2, 3]} for p in prompts) and len(prompts) == len(params)
+            seen.append([p.seed for p in params])
+            return [SimpleNamespace(outputs=[SimpleNamespace(text=f"answer-{p.seed}", token_ids=[4, 5], finish_reason="stop")])
+                    for p in params]
     monkeypatch.setitem(sys.modules, "vllm", SimpleNamespace(LLM=LLM, SamplingParams=lambda **kw: SimpleNamespace(**kw)))
+
+
+def test_vllm_template_and_seed(monkeypatch):
+    calls, seen = [], []
+    _fake_vllm(monkeypatch, calls, seen)
     generator = Generator({"model_id": "fake/model", "revision": "fixed-sha", "chat_template_kwargs": {"enable_thinking": False},
                            "system_prompt": "system"},
                           {"engine": "vllm", "temperature": .7, "top_p": .95, "max_new_tokens": 16})
     text, metadata = generator("question", 77)
-    assert text == "answer" and metadata["prompt_tokens"] == 3 and metadata["completion_tokens"] == 2
+    assert text == "answer-77" and metadata["prompt_tokens"] == 3 and metadata["completion_tokens"] == 2
     assert metadata["formatted_prompt"] == "<start>system/user<assistant>"
     assert metadata["messages"][0]["role"] == "system" and metadata["seed_applied"]
     generator("question again", 77)
     assert len(calls) == 1 and calls[0]["generation_config"] == "vllm"
+    assert "tensor_parallel_size" not in calls[0]
 
 
-@pytest.mark.parametrize("supports_seed", [False, True])
-def test_api_usage_seed_and_no_credentials_in_metadata(monkeypatch, supports_seed):
-    monkeypatch.setenv("TEAM_KEY", "secret-test-value")
-    monkeypatch.setenv("TEAM_URL", "https://inference.example/v1")
-    requests = []
-    def create(**request):
-        requests.append(request)
-        usage = SimpleNamespace(prompt_tokens=7, completion_tokens=11, model_dump=lambda: {"prompt_tokens": 7, "completion_tokens": 11})
-        return SimpleNamespace(model="served-fixed-model", usage=usage, system_fingerprint="server-v1",
-                               choices=[SimpleNamespace(message=SimpleNamespace(content="answer"), finish_reason="stop")])
-    def client(**kw):
-        assert kw["api_key"] == "secret-test-value" and kw["max_retries"] == 0
-        return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
-    monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=client))
-    g = Generator({"model_id": "requested-model", "system_prompt": "be concise", "api": {
-        "key_env": "TEAM_KEY", "base_url_env": "TEAM_URL", "supports_seed": supports_seed,
-        "max_tokens_field": "max_completion_tokens"}},
-        {"engine": "api", "temperature": .7, "top_p": .95, "max_new_tokens": 12})
-    text, meta = g("question", 44)
-    assert text == "answer" and meta["completion_tokens"] == 11
-    assert ("seed" in requests[0]) == supports_seed and meta["seed_applied"] == supports_seed
-    assert "max_completion_tokens" in requests[0] and "secret-test-value" not in str(meta)
-    assert requests[0]["messages"][0] == {"role": "system", "content": "be concise"}
+def test_vllm_batch_keeps_one_seed_per_request_and_sets_tensor_parallel(monkeypatch):
+    calls, seen = [], []
+    _fake_vllm(monkeypatch, calls, seen)
+    generator = Generator({"model_id": "fake/model", "revision": "fixed-sha", "gpus": 2,
+                           "chat_template_kwargs": {"enable_thinking": False}},
+                          {"engine": "vllm", "temperature": .7, "top_p": .95, "max_new_tokens": 16})
+    out = generator.generate_batch([("q1", 5), ("q2", 6), ("q3", 7)])
+    assert seen == [[5, 6, 7]] and [t for t, _ in out] == ["answer-5", "answer-6", "answer-7"]
+    assert all(m["batch_size"] == 3 and m["batch_seconds_per_sample"] >= 0 for _, m in out)
+    assert calls[0]["tensor_parallel_size"] == 2
 
 
-def test_unknown_engine_rejected():
+def test_unpinned_revision_rejected():
+    with pytest.raises(ValueError, match="pin the model revision"):
+        Generator({"model_id": "fake/model", "revision": "PIN_MODEL_COMMIT"}, {"engine": "vllm"})("q", 1)
+
+
+@pytest.mark.parametrize("engine", ["typo", "api"])
+def test_unknown_engine_rejected(engine):
     with pytest.raises(ValueError, match="unsupported engine"):
-        Generator({}, {"engine": "typo"})
+        Generator({}, {"engine": engine})

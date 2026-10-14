@@ -56,9 +56,25 @@ def response_hash(row):
     return digest({k: v for k, v in row.items() if k not in ("response_hash", "attempt", "error")})
 
 
-def generate(cfg, model, member="local", shard_index=0, num_shards=1, max_retries=2, retry_delay=1.0, backend=None):
-    if max_retries < 0 or retry_delay < 0:
-        raise ValueError("invalid retry settings")
+def _run_batch(generator, items):
+    """[(query, seed)] -> [(text, metadata) or Exception]. Plain callables (test doubles) run one by one."""
+    if hasattr(generator, "generate_batch"):
+        return generator.generate_batch(items)
+    out = []
+    for query, seed in items:
+        try:
+            out.append(generator(query, seed))
+        except Exception as e:
+            out.append(e)
+    return out
+
+
+def generate(cfg, model, member="local", shard_index=0, num_shards=1, max_retries=2, retry_delay=1.0, backend=None,
+             batch_size=256):
+    """Generate every missing (query, sample) of this shard. ``batch_size`` requests go to vLLM at once;
+    it changes throughput only (it is not part of the run identity), and each request keeps its own seed."""
+    if max_retries < 0 or retry_delay < 0 or batch_size < 1:
+        raise ValueError("invalid retry/batch settings")
     path, rows, spec = job_spec(cfg, model, member, shard_index, num_shards)
     g = spec["generation"]
     with locked(path / ".writer.lock"):
@@ -68,32 +84,41 @@ def generate(cfg, model, member="local", shard_index=0, num_shards=1, max_retrie
         output.touch(exist_ok=True)
         done = successful(read_jsonl(output))
         generator = backend or Generator(spec["model"], g)
-        errors = 0
+        pending = []
         for r in rows:
             for sid in range(g["k"]):
-                k = r["id"], model, sid
-                if k in done and done[k]["success"]:
+                if (r["id"], model, sid) in done and done[(r["id"], model, sid)]["success"]:
                     continue
-                seed = int(digest([spec["seed"], r["id"], model, sid])[:8], 16) % (2**31)
-                for attempt in range(max_retries + 1):
+                pending.append((r, sid, int(digest([spec["seed"], r["id"], model, sid])[:8], 16) % (2**31)))
+        errors = 0
+        for start in range(0, len(pending), batch_size):
+            todo = pending[start:start + batch_size]
+            for attempt in range(max_retries + 1):
+                results = _run_batch(generator, [(r["query"], seed) for r, _, seed in todo])
+                failed = []
+                for (r, sid, seed), result in zip(todo, results):
                     record = {"query_id": r["id"], "model": model, "sample_id": sid,
                               "dataset_id": spec["dataset_id"], "run_id": digest(spec), "prompt": r["query"],
                               "seed": seed, "generation": g, "attempt": attempt}
                     try:
-                        text, metadata = generator(r["query"], seed)
+                        if isinstance(result, Exception):
+                            raise result
+                        text, metadata = result
                         if not isinstance(text, str):
                             raise ValueError("backend response must be text")
                         record.update(response=text, metadata=metadata, success=True, error=None)
                     except Exception as e:
                         record.update(response=None, metadata={}, success=False, error=f"{type(e).__name__}: {e}")
+                        failed.append((r, sid, seed))
                     record["response_hash"] = response_hash(record)
                     append(output, record)
-                    if record["success"]:
-                        break
-                    if attempt < max_retries:
-                        time.sleep(min(retry_delay * 2**attempt, 30))
-                if not record["success"]:
-                    errors += 1
+                todo = failed
+                if not todo:
+                    break
+                if attempt < max_retries:
+                    time.sleep(min(retry_delay * 2**attempt, 30))
+            errors += len(todo)
+            print(f"[generate] {model}: {min(start + batch_size, len(pending))}/{len(pending)} samples", flush=True)
         if errors:
             raise RuntimeError(f"{errors} samples failed; rerun the same command to resume; details in {output}")
     return path
@@ -162,7 +187,6 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
             raise ValueError("generate this shard before scoring")
         responses = successful(read_jsonl(path / "responses.jsonl"))
         errors = 0
-        cache = {}
         for k, r in sorted(responses.items()):
             if not r["success"]:
                 continue
@@ -173,7 +197,7 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
                     raise ValueError("stale score bound to a different response")
                 continue
             query = by_id[r["query_id"]]
-            if scorer == "ground_truth" and not query.get("ground_truth_scorer"):
+            if scorer == "ground_truth" and not query.get("answer_type"):
                 continue  # unavailable is null, never a fabricated correctness label
             record = {"query_id": k[0], "model": k[1], "sample_id": k[2], "response_hash": r["response_hash"],
                       "dataset_id": spec["dataset_id"], "evaluator_id": evaluator_id, "evaluator": evaluator_spec, "environment": scoring_environment}
@@ -184,11 +208,11 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
                 if scorer == "armorm":
                     value, details = evaluator(query["query"], text)
                 else:
-                    from ..scorers import get_scorer
-                    name = query["ground_truth_scorer"]
-                    if name not in cache:
-                        cache[name] = get_scorer(name)
-                    value, details = float(cache[name]([text], [query["reference"]])[0]), {"method": name}
+                    from ..ground_truth import score_query
+                    ev = score_query(query, text, mbpp_timeout=int(options.get("mbpp_timeout", 5)))
+                    value = float(ev.score)
+                    details = {"answer_type": query["answer_type"], "mode": ev.mode,
+                               "strict_correct": ev.strict_correct, "predicted": ev.predicted}
                     if not 0 <= value <= 1:
                         raise ValueError("ground truth must be in [0,1]; reference metrics need a separate channel")
                 if not math.isfinite(value):

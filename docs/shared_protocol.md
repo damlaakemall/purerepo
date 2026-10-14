@@ -41,9 +41,23 @@ split ve GT evaluator adını taşır. `splits.json`, kaynak revision/fingerprin
 YAML'ın çözümlenmiş hali ve dosya hash'leri manifestte saklanır. Dataset yeniden
 oluşturulmaz; aynı konfigürasyonla çağrı doğrulayıp mevcut kopyayı kullanır. Farklı
 konfigürasyon için yeni sürüm/path gerekir. HF kaynakları için revision zorunludur;
-örnek config'teki `PIN_*` alanları gerçek çalışmadan önce commit SHA ile doldurulur.
+`shared_v1.yaml`'daki bütün kaynaklar commit SHA ile sabitlendi. Aynı normalize metin
+ikinci kez gelirse (Alpaca'da var) atlanır; kaynak başına alınan/atlanan sayılar
+dataset manifestine yazılır. Çok-config'li kaynaklar (`hf_config` listesi, BBH)
+`n_per_config` ile görev başına eşit örneklenir.
 
-## 2. Bağımsız generation
+## 2. Bağımsız generation (yalnız Tosun GPU'ları)
+
+Ücretli/token API kullanılmaz: bütün havuz Tosun'da yerel GPU'larda çalışır. Motor
+`vllm` (varsayılan) veya `hf` (vLLM bir modeli henüz desteklemiyorsa yedek). `api`
+motoru kaldırıldı; config'te yazılırsa hata verir.
+
+Havuz: [`configs/model_pools/team.yaml`](../configs/model_pools/team.yaml), referans
+repodaki 12 modelin 9 açık ağırlıklı olanı (Qwen3 4B/8B, Gemma 4 E2B/E4B/26B-A4B,
+Cogito 8B, DeepSeek-R1-Distill 7B, Granite 4.1 8B, Qwen3.6 27B). Üç API modeli
+(kimi-k3, glm-5.3, gpt-5.4) çıkarıldı. Her model ve dataset sabit HF commit'ine
+bağlıdır (2026-10-15); `PIN_*` kalmadı. `gpus: 2` olan modellerde vLLM tensor
+parallelism otomatik açılır ve `submit_member.sh` iki GPU ister.
 
 Her iş `contributions/<member>/<model>/shard-X-of-Y/` altında yazar:
 
@@ -53,60 +67,66 @@ Her iş `contributions/<member>/<model>/shard-X-of-Y/` altında yazar:
   seed, metadata, response hash, başarı/hata ve retry denemesi.
 - `ground_truth.jsonl`, `armorm.jsonl`: birbirinden bağımsız skor günlükleri.
 
-Model YAML'ı `model_pool` dosyasında veya benchmark'ta inline olabilir. Model bazında
-`generation.k` global `k` değerini değiştirebilir. Üye başına değişik soru seti
-üretilmez; shard'lar query ID hash'iyle ayrılır. Her shard ayrı dosya yazar.
+Model bazında `generation.k` global `k` değerini değiştirebilir. Üye başına değişik
+soru seti üretilmez; shard'lar query ID hash'iyle ayrılır.
 
-Seed = hash(global seed, query ID, model, sample ID). Bir istek bir sample üretir;
-böylece shard ve resume seed'i değiştirmez. Bu ilk sürüm throughput yerine açık
-provenance ve güvenilir sample resume'u seçer; vLLM motoru süreçte bir kez yüklenir.
-Gelecekte aynı kayıt/seed sözleşmesi korunarak batching eklenebilir. GPU/kernel,
-SDK ve API servis değişiklikleri nedeniyle aynı seed bit düzeyinde aynı sonucu
-garanti etmez. API seed desteği `supports_seed` ile açıkça belirtilir; gönderilmediği
-zaman metadata `seed_applied: false` der.
+Seed = hash(global seed, query ID, model, sample ID). Her sample ayrı bir istek ve
+kendi seed'i vardır, bu yüzden shard ve resume seed'i değiştirmez. vLLM bu istekleri
+toplu gönderir (`--batch-size`, varsayılan 256; her isteğin kendi `SamplingParams(seed)`'i
+var). Batch boyutu yalnız hızı etkiler, run kimliğine girmez. GPU/kernel ve
+batch kompozisyonu nedeniyle aynı seed bit düzeyinde aynı sonucu garanti etmez.
+Her yanıt `batch_seconds_per_sample` (batch duvar saati / batch boyutu) kaydeder:
+ölçülen GPU süresi, ileride maliyet veya gecikme olarak kullanılabilir.
 
 vLLM ve HF tokenizer'ın chat template'ini uygular; system turn ve
-`chat_template_kwargs` model kaydındadır. Render edilmiş prompt, mesajlar, template
-metni/hash'i, tokenizer kimliği/revision bilgisi ve prompt token ID hash'i kaydedilir.
-Formatlanmış chat metnine ikinci kez özel token eklenmez. HF modelinin çözümlenen
-revision'ı metadata'dadır; vLLM için istenen sabit revision ve tokenizer bilgisi
-saklanır. API'de servis template'i görünür değildir: gönderilen mesaj/request,
-dönen model adı, varsa system fingerprint ve kullanım cevabı saklanır. API'nin
-kullanmadığı seed kullanılmış gibi gösterilmez; model ismi sessizce değiştirilmez.
+`chat_template_kwargs` model kaydındadır (`enable_thinking: false` referanstaki gibi).
+Render edilmiş prompt, mesajlar, template metni/hash'i, tokenizer kimliği/revision
+bilgisi ve prompt token ID hash'i kaydedilir. Formatlanmış chat metnine ikinci kez
+özel token eklenmez. Token sayıları token ID'lerinden alınır.
 
-`temperature`, `top_p`, `max_new_tokens`, `k` YAML'da kaydedilir. API'nin farklı
-parametre ihtiyaçları `api.max_tokens_field`, `send_sampling_parameters`,
-`request_kwargs` ile açıkça yapılandırılır. Environment değişken **adları** config'e
-girer; anahtarların değerleri kayda yazılmaz. Token sayıları HF/vLLM'de token
-ID'lerinden, API'de provider usage'dan alınır. API usage yoksa maliyet uydurulmaz;
-release build hata verir. `completion_tokens` provider'ın toplam billed output
-sayısıdır; reasoning tokenları bir kez daha eklenmez. Ham usage ayrıntıları korunur.
+`temperature`, `top_p`, `max_new_tokens`, `k` YAML'da kaydedilir: `k: 10` (best-of-n
+router'ları için), `max_new_tokens: 4096` (reasoning modelleri 512'de kesilir).
 
-Başarılı sample'lar atlanır; başarısız sample yeniden denenir. Bounded exponential
-retry her başarısız denemeyi saklar. Başarısız generation işin exit kodunu sıfırdan
-farklı yapar, böylece SLURM bağımlılıkları ilerlemez. Kesilmiş son JSONL satırı
-`.interrupted-tail` dosyasında saklanıp yeniden yazılır; ortadaki bozuk satır hata
-verir. Aynı dosya için exclusive lock vardır. SIGKILL sonrası kalan lock'u ancak
-önceki işin durduğunu kontrol ettikten sonra elle kaldırın. Birden fazla süreç aynı
-shard dosyasına yazmamalıdır. YAML/model ayarı veya kaynak kod hash’i değiştiğinde aynı işe resume edilmez.
+Başarılı sample'lar atlanır; başarısız sample'lar batch sonunda yalnız kendileri
+yeniden denenir (bounded exponential retry, her deneme saklanır). Başarısız generation
+işin exit kodunu sıfırdan farklı yapar, böylece SLURM bağımlılıkları ilerlemez. Kesilmiş
+son JSONL satırı `.interrupted-tail` dosyasında saklanıp yeniden yazılır; ortadaki bozuk
+satır hata verir. Aynı dosya için exclusive lock vardır. SIGKILL sonrası kalan lock'u
+ancak önceki işin durduğunu kontrol ettikten sonra elle kaldırın. YAML/model ayarı
+veya kaynak kod hash'i değiştiğinde aynı işe resume edilmez.
 
 ## 3. İki ayrı scoring kanalı
 
-GT, kaynağın `ground_truth_scorer` alanına göre mevcut exact-number/MCQ scorer'larını
-kullanır. Checkable gold olmayan kaynakta bu alan `null` olur ve GT skoru **null**
-kalır; ArmoRM bunun yerine GT sayılmaz. Başka GT scorer'ları mevcut scorer registry'ye
-eklenebilir. BARTScore önceki benchmark'larda korunur; negatif BART değerleri GT
-kanalına karıştırılmaz. GT'nin bu sürümü matematik/MCQ ile sınırlıdır; referans
-repodaki code-execution/olympiad judge'ları taşınmamıştır.
+**Ground truth**, referans repodaki (SU Lab LLM-Routing-Project) blind audit'lerle
+sağlamlaştırılmış evaluator'ların kopyasıdır:
+[`llm_routing/pipeline/ground_truth/`](../llm_routing/pipeline/ground_truth/). Her soru
+`answer_type`, `gold` ve gerekirse `aux` taşır:
+
+| kaynak | answer_type | skor |
+|---|---|---|
+| GSM8K | `numeric` | 0/1; "Answer: n", `\boxed{}`, "#### n", "Final Answer" başlığı, son sayı |
+| MMLU-Pro | `mcq_letter` | 0/1; açık "Answer: X" sonucu, sonra son satır/prose fallback |
+| BBH (27 görev × 80) | `exact_match_text` | 0/1; "Answer:" satırı, sonra göreve özgü fallback |
+| OlympiadBench | `exact_match_text` + `olympiadbench` override | 0/1; sympy eşdeğerlik hakemi |
+| MBPP | `code_tests` | 0/1; model kodu `python -I` alt süreçte, testlerle, zaman aşımlı |
+| Alpaca, Multi-News | `reference_text` | sürekli token F1 ∈ [0, 1] |
+
+Burada referansa göre üç düzeltme yapıldı (testleri `tests/test_ground_truth.py`):
+MCQ fallback'i "A cache is…" gibi bir cümleyi artık A şıkkı saymaz (harften sonra
+ayraç veya satır sonu gerekir); BBH'de altın `(B)` iken "Answer: B" doğru sayılır;
+MBPP zaman aşımı scoring hatası değil yanlış cevaptır (`mode: timeout`). Sorular,
+evaluator'ın ilk okuduğu biçimi ister ([`formatters.py`](../llm_routing/pipeline/shared/formatters.py)).
+Gold'u olmayan kaynakta `answer_type: null` olur ve GT **null** kalır; ArmoRM bunun
+yerine GT sayılmaz. MBPP model kodu çalıştırır: GT skorlamasını compute node'da yapın.
 
 ArmoRM `RLHFlow/ArmoRM-Llama3-8B-v0.1` sabit revision ile offline yüklenir. Her soru
 ve üretilmiş yanıtı user/assistant olarak kendi template'iyle değerlendirir. Scalar
 score, objective rewards, gating ağırlıkları ve evaluator template hash'i saklanır.
-Context aşımı sessiz truncation yerine hata olur. ArmoRM response üretmez veya
-router training yapmaz. Model kartındaki custom code için `trust_remote_code=True`
-kullanılır; sabit ve incelenmiş revision seçilmelidir. Bu kodla GPU'da gerçek ArmoRM
-çalıştırması yapılmamıştır; ilk küçük Tosun doğrulamasında bağımlılık uyumluluğu da
-kontrol edilmelidir.
+Context aşımı sessiz truncation yerine hata olur (Multi-News bu yüzden
+`max_query_chars` ile önceden süzülür; uzun örnekler kesilmez, atlanır). ArmoRM
+response üretmez veya router training yapmaz. `trust_remote_code=True` sabit
+revision ile kullanılır. Bu kod GPU'da henüz gerçek ArmoRM ile çalıştırılmadı; ilk
+küçük Tosun koşusunda bağımlılık uyumluluğu kontrol edilmelidir.
 
 Her scoring kaydı raw yanıtın hash'ine ve evaluator config hash'ine bağlıdır.
 `text_policy: strip_think` yalnız scoring girdisinden `<think>` bloğunu çıkarır;
@@ -136,18 +156,22 @@ istenen eksik koleksiyonlara izin verir; eksiklik sayısı manifestte görünür
 | `wide.parquet` | soru başına modelin sample sayısı ve her metric için first/mean/max, toplam sample cost |
 | `views/ground_truth/` | mevcut router'ların okuyabildiği GT `Benchmark` |
 | `views/armorm/` | aynı sorular/modeller/split/cost ile ayrı ArmoRM `Benchmark` |
+| `views/*/extras/` | sample başına `(N, M, k)` diziler: `sample_cost`, `completion_tokens`, `seconds` ve diğer kalite kanalı (GT view'da `armorm`, ArmoRM view'da `ground_truth`) |
 | `dataset/` | orijinal sorular, referanslar, split ve dataset manifesti |
 | `inputs/` | katkı paketlerinin tamamı; retry/error/raw usage/scoring detayları kaybolmaz |
 | `config.json`, `manifest.json` | çözümlenmiş konfigürasyon, kaynak/artifact SHA256, content hash, ortam, sürüm |
 
-Diziler `(N, M, max_k)` biçimindedir; olmayan sample'lar NaN ile doldurulur. NaN
+`extras` best-of-n ve gecikme duyarlı router'lar içindir: BEST-Route ArmoRM'u
+selector olarak kullanıp seçtiği sample'ın GT'siyle ölçülebilir ve n sample'ın gerçek
+maliyetini öder; MixLLM `seconds` ile gecikme cezası kurabilir. Diziler `(N, M, max_k)` biçimindedir; olmayan sample'lar NaN ile doldurulur. NaN
 bir başarısız yanıt etiketi değildir. Hybrid LLM'nin mevcut probabilistic label
 hesabı padding'i karşılaştırma paydasına katmaz; tam veride aynı sonucu verir.
 Makaleye özgü label'lar frozen matrise yazılmaz.
 
-Cost tanımı sabittir: `usd_tokens` ayrı input/output per-million fiyatları kullanır;
-`token_proxy` mevcut repo gibi `cost_per_1k_tokens*(input+output)/1000` kullanır ve
-**USD diye raporlanmaz**. Tarihli snapshot, kaynak/note config'te tutulmalıdır.
+Cost tanımı sabittir: `token_proxy` = `cost_per_1k_tokens*(input+output)/1000`, burada
+`cost_per_1k_tokens` modelin **aktif** parametre sayısıdır (milyar). **USD diye raporlanmaz.**
+API kullanılmadığı için `usd_tokens` (input/output per-million fiyat) yalnız ileride
+gerekirse diye kodda durur. Tarihli snapshot, kaynak/note config'te tutulmalıdır.
 Missing price ve usage hatadır; local GPU'ya sessizce sıfır fiyat atanmaz.
 Single-response evaluation sample 0'ın hem kalitesini hem maliyetini kullanır.
 Bütün sample maliyetleri long'da ve toplamları wide'da saklanır.
@@ -183,8 +207,12 @@ Bu çalışma best-of-N selector veya online öğrenici implement etmez.
 Yerel SU Lab LLM-Routing-Project'in generation/provider, ayrı GT/ArmoRM,
 shared_protocol long/wide, manifest, split ve router adapter akışları incelendi.
 Sample bazında JSONL, skor kanallarının ayrılması ve model-native label adapter'ı
-fikri benimsendi. Referanstaki router trainer'ları veya büyük prompt dosyaları
-kopyalanmadı. Burada split'ler generation'dan önce dondurulur; model adı config
+fikri benimsendi. Ground-truth evaluator'ları ve Tosun SLURM ayarları (partition/QOS
+`cuda`, `python/3.12.9` + `cuda/12.8` modülleri) referanstan alındı; prompt karışımı
+(GSM8K, MMLU-Pro, BBH, OlympiadBench, MBPP, Alpaca, Multi-News) ve 60/10/30 split
+referansla aynı. Referanstaki router trainer'ları kopyalanmadı. Referansta RouteLLM'in
+Elo/tier hesabı val ve test battle'larını da görüyor; buradaki implementasyonda
+yalnız train split kullanılmalı. Burada split'ler generation'dan önce dondurulur; model adı config
 üzerinden sessizce yeniden yazılmaz; first kalite ile first maliyet eşlenir.
 
 Backend referansları: [vLLM offline inference](https://docs.vllm.ai/en/latest/getting_started/quickstart/),

@@ -11,12 +11,14 @@ requires-python = ">=3.10"
 dependencies = [
   "numpy", "scipy", "scikit-learn", "pandas", "matplotlib",
   "omegaconf>=2.3", "datasets", "huggingface_hub", "pyarrow",
+  # ground-truth scoring: OlympiadBench equivalence judge; antlr4 powers sympy's LaTeX parser
+  # (without it fractions/intervals are judged incorrect)
+  "sympy", "antlr4-python3-runtime==4.11.*",
 ]
 
 [project.optional-dependencies]
-gpu = ["torch", "transformers", "sentencepiece", "protobuf", "accelerate"]
+gpu = ["torch", "transformers>=4.57", "tokenizers>=0.22", "sentencepiece", "protobuf", "accelerate"]
 tracking = ["wandb"]
-api = ["openai"]
 vllm = ["vllm"]
 dev = ["pytest"]
 

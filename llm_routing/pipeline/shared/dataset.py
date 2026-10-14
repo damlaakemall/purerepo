@@ -41,8 +41,47 @@ def load_dataset(cfg):
     return rows, man
 
 
+def _load_source(src, seed):
+    """Examples of one source, shuffled with the global seed. HF sources must pin a commit."""
+    if "local_path" in src:
+        return list(read_jsonl(src["local_path"])), {"name": src["name"], "sha256": file_hash(src["local_path"])}
+    from datasets import concatenate_datasets, load_dataset as hf_load
+    if not src.get("revision") or src["revision"].startswith("PIN_"):
+        raise ValueError(f"{src['name']}: pin a Hugging Face dataset revision")
+    configs = src.get("hf_config")
+    configs = configs if isinstance(configs, list) else [configs]
+    parts, fingerprints = [], []
+    for c in configs:
+        ds = hf_load(src["hf_id"], c, split=src.get("hf_split", "train"), revision=src["revision"],
+                     data_files=src.get("data_files"))
+        fingerprints.append(ds._fingerprint)
+        parts.append(ds.add_column("_config", [c] * len(ds)).add_column("_row", list(range(len(ds)))))
+    ds = concatenate_datasets(parts).shuffle(seed=seed)
+    return list(ds), {"name": src["name"], "revision": src["revision"], "configs": configs, "fingerprints": fingerprints}
+
+
+def _row(src, ex):
+    """One frozen query: text, gold answer and how it is scored."""
+    from .formatters import FORMATTERS
+    if src.get("formatter"):
+        out = dict(FORMATTERS[src["formatter"]](ex))
+    else:
+        from ..ground_truth import LEGACY_SCORERS
+        answer_type = src.get("answer_type", LEGACY_SCORERS.get(src.get("ground_truth_scorer"), src.get("ground_truth_scorer")))
+        gold = ex.get(src.get("reference_field", "reference"))
+        out = {"query": src["query_template"].format_map(ex).strip(),  # missing fields are errors
+               "gold": None if answer_type is None else gold, "answer_type": answer_type,
+               "reference": "" if gold is None else str(gold)}
+    if out["answer_type"] is not None:
+        from ..ground_truth import supported_answer_types
+        if out["answer_type"] not in supported_answer_types():
+            raise ValueError(f"{src['name']}: unknown answer_type {out['answer_type']!r}")
+        if out["gold"] in (None, "", []):
+            raise ValueError(f"{src['name']}: example without a gold answer")
+    return out
+
+
 def build_queries(cfg):
-    from ..build import FORMATTERS
     model_pool(cfg)
     target = dataset_dir(cfg)
     if target.exists():
@@ -52,37 +91,46 @@ def build_queries(cfg):
     fractions = cfg["splits"]
     if set(fractions) != {"train", "val", "test"} or any(v < 0 for v in fractions.values()) or abs(sum(fractions.values()) - 1) > 1e-9:
         raise ValueError("splits must contain train/val/test and sum to 1")
-    rows, source_meta = [], []
+    rows, source_meta, seen = [], [], set()
     sources = cfg["sources"]
     if len({s["name"] for s in sources}) != len(sources):
         raise ValueError("source names must be unique")
     for src in sources:
-        if "local_path" in src:
-            data = read_jsonl(src["local_path"])
-            source_meta.append({"name": src["name"], "sha256": file_hash(src["local_path"])})
-        else:
-            from datasets import load_dataset as hf_load
-            if not src.get("revision") or src["revision"].startswith("PIN_"):
-                raise ValueError(f"{src['name']}: pin a Hugging Face dataset revision")
-            ds = hf_load(src["hf_id"], src.get("hf_config"), split=src.get("hf_split", "train"), revision=src["revision"])
-            data = ds.shuffle(seed=cfg["seed"]).select(range(min(src["n"], len(ds))))
-            source_meta.append({"name": src["name"], "revision": src["revision"], "fingerprint": ds._fingerprint})
-        for ex in list(data)[:src["n"]]:
-            if src.get("formatter"):
-                query, reference = FORMATTERS[src["formatter"]](ex)
-            else:
-                query = src["query_template"].format_map(ex).strip()  # missing fields are errors
-                reference = str(ex.get(src.get("reference_field", "reference"), ""))
+        data, meta = _load_source(src, cfg["seed"])
+        per_config = src.get("n_per_config")
+        taken, counts, skipped = 0, {}, {"duplicate": 0, "too_long": 0}
+        for ex in data:
+            group_key = ex.get("_config")
+            if per_config is not None and counts.get(group_key, 0) >= per_config:
+                continue
+            if per_config is None and taken >= src["n"]:
+                break
+            row = _row(src, ex)
+            query = row["query"]
             if not query:
                 raise ValueError("empty query")
-            original_id = ex.get(src.get("id_field", "id"))
-            qid = src["name"] + "/" + digest({"id": original_id, "query": query})[:24]
-            # Global normalized-text grouping prevents exact duplicates leaking even across sources.
+            if src.get("max_query_chars") and len(query) > src["max_query_chars"]:
+                skipped["too_long"] += 1  # e.g. Multi-News beyond the ArmoRM context: dropped, never truncated
+                continue
+            # Global normalized-text grouping: an exact duplicate (Alpaca has some) enters once, in one split.
             group = re.sub(r"\s+", " ", query.lower()).strip()
+            if group in seen:
+                skipped["duplicate"] += 1
+                continue
+            seen.add(group)
+            original_id = ex.get(src["id_field"]) if src.get("id_field") else (
+                f"{ex['_config']}/{ex['_row']}" if "_row" in ex else ex.get("id"))
+            qid = src["name"] + "/" + digest({"id": original_id, "query": query})[:24]
             u = int(digest([cfg["seed"], group])[:16], 16) / 2**64
             split = "train" if u < fractions["train"] else ("val" if u < fractions["train"] + fractions["val"] else "test")
-            rows.append({"id": qid, "query": query, "reference": reference, "source": src["name"], "split": split,
-                         "ground_truth_scorer": src.get("ground_truth_scorer"), "original_id": original_id})
+            rows.append({"id": qid, "query": query, "reference": row.get("reference", ""), "gold": row["gold"],
+                         "answer_type": row["answer_type"], "aux": row.get("aux") or {},
+                         "gt_dataset": row.get("gt_dataset", src["name"]), "source": src["name"], "split": split,
+                         "original_id": original_id})
+            taken += 1
+            counts[group_key] = counts.get(group_key, 0) + 1
+        meta.update(n=taken, skipped=skipped)
+        source_meta.append(meta)
     rows.sort(key=lambda r: r["id"])
     if not rows or len({r["id"] for r in rows}) != len(rows):
         raise ValueError("empty dataset or duplicate query IDs")

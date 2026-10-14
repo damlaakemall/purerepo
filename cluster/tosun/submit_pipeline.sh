@@ -19,8 +19,8 @@ fi
 N=$(python -c "from llm_routing.config import load_benchmark_config as l; print(len(l('$CFG')['models']))")
 mkdir -p logs
 [ -f "$(python -c "from llm_routing.config import load_benchmark_config as l; print(l('$CFG')['path'])")/queries.jsonl" ] || llmr build-queries "$CFG"
-COMMON=(--partition="$LLMR_PARTITION" ${LLMR_ACCOUNT:+--account=$LLMR_ACCOUNT} ${LLMR_QOS:+--qos=$LLMR_QOS})
-GEN=$(sbatch --parsable "${COMMON[@]}" --gres="$LLMR_GPU_GRES" --array=0-$((N-1)) cluster/tosun/jobs/generate.sbatch "$CFG")
-SCO=$(sbatch --parsable "${COMMON[@]}" --gres="$LLMR_GPU_GRES" --array=0-$((N-1)) --dependency=afterok:$GEN cluster/tosun/jobs/score.sbatch "$CFG")
+COMMON=(--partition="$LLMR_PARTITION" ${LLMR_ACCOUNT:+--account=$LLMR_ACCOUNT} ${LLMR_QOS:+--qos=$LLMR_QOS} ${LLMR_EXCLUDE:+--exclude=$LLMR_EXCLUDE})
+GEN=$(sbatch --parsable "${COMMON[@]}" --gres="$(llmr_gres 1)" --array=0-$((N-1)) cluster/tosun/jobs/generate.sbatch "$CFG")
+SCO=$(sbatch --parsable "${COMMON[@]}" --gres="$(llmr_gres 1)" --array=0-$((N-1)) --dependency=afterok:$GEN cluster/tosun/jobs/score.sbatch "$CFG")
 ASM=$(sbatch --parsable "${COMMON[@]}" --dependency=afterok:$SCO cluster/tosun/jobs/assemble.sbatch "$CFG" $PUSH)
 echo "submitted: generate=$GEN score=$SCO assemble=$ASM   (watch with: squeue -u $USER)"

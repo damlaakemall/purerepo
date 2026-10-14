@@ -59,6 +59,14 @@ class Router(ABC):
         """Hyperparameters / learned values worth logging (e.g. t* in Hybrid LLM)."""
         return {}
 
+    def evaluation_models(self) -> list[str] | None:
+        """Models the router may route to at test time, known after ``fit``. None = every candidate.
+
+        A dynamic-pool router (UniRoute) trains on one set of LLMs and is tested on unseen ones; the
+        runner then scores it, the single models and every baseline on that subset only.
+        """
+        return None
+
 
 class BinaryRouter(Router):
     """``score(queries)`` in [0, 1]: higher = the small model is good enough. Route to small iff score >= threshold."""

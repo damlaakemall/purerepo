@@ -104,7 +104,7 @@ def locked(path):
 
 def environment():
     packages = {}
-    for name in ("numpy", "pyarrow", "torch", "transformers", "vllm", "openai"):
+    for name in ("numpy", "pyarrow", "torch", "transformers", "vllm", "sympy"):
         try:
             packages[name] = version(name)
         except PackageNotFoundError:

@@ -1,7 +1,16 @@
-"""Lazy backends. One independent sample per request keeps resume/sharding seeds stable."""
+"""Local GPU backends for Tosun (vLLM, or plain transformers). No paid APIs.
+
+Every sample is its own request with its own seed, so resume and sharding never change a seed.
+vLLM batches many such requests in one ``generate`` call (one SamplingParams per request), which
+keeps that contract while using the GPU properly.
+"""
 from __future__ import annotations
 
+import time
+
 from .io import digest
+
+ENGINES = ("vllm", "hf")
 
 
 def messages_for(model, query):
@@ -16,64 +25,38 @@ class Generator:
         self.model, self.generation = model, generation
         self.engine = generation.get("engine", "vllm")
         self.loaded = False
-        if self.engine not in ("vllm", "hf", "api"):
-            raise ValueError(f"unsupported engine: {self.engine}")
+        if self.engine not in ENGINES:
+            raise ValueError(f"unsupported engine: {self.engine} (Tosun runs local models only: {ENGINES})")
 
     def _load(self):
         if self.loaded:
             return
-        m, g = self.model, self.generation
+        m = self.model
         self.model_id = m.get("model_id", m.get("hf_id"))
         if not self.model_id:
             raise ValueError("model_id or hf_id is required")
-        if self.engine != "api" and (not m.get("revision") or m["revision"].startswith("PIN_")):
+        if not m.get("revision") or m["revision"].startswith("PIN_"):
             raise ValueError("pin the model revision before generation")
-        if self.engine == "api":
-            import os
-            from openai import OpenAI
-            options = m.get("api", {})
-            # Only environment variable NAMES enter artifacts, never credential values.
-            api_key = os.environ[options.get("key_env", "OPENAI_API_KEY")]
-            self.client = OpenAI(api_key=api_key, base_url=os.environ.get(options.get("base_url_env", "OPENAI_BASE_URL")),
-                                 max_retries=0, timeout=options.get("timeout", 120))
-        elif self.engine == "vllm":
+        engine_kwargs = dict(m.get("engine_kwargs", {}))
+        if self.engine == "vllm":
             from vllm import LLM
+            if m.get("gpus", 1) > 1:
+                engine_kwargs.setdefault("tensor_parallel_size", m["gpus"])
             self.llm = LLM(model=self.model_id, revision=m.get("revision"), tokenizer_revision=m.get("tokenizer_revision", m.get("revision")),
-                           generation_config="vllm", **m.get("engine_kwargs", {}))
+                           generation_config="vllm", **engine_kwargs)
             self.tok = self.llm.get_tokenizer()
         else:
             from transformers import AutoModelForCausalLM, AutoTokenizer
             self.tok = AutoTokenizer.from_pretrained(self.model_id, revision=m.get("tokenizer_revision", m.get("revision")))
             self.llm = AutoModelForCausalLM.from_pretrained(self.model_id, revision=m.get("revision"),
-                                                           device_map="auto", **m.get("engine_kwargs", {})).eval()
+                                                           device_map="auto", **engine_kwargs).eval()
         self.loaded = True
 
-    def __call__(self, query, seed):
-        self._load()
-        m, g = self.model, self.generation
+    def _prompt(self, query, seed):
+        m = self.model
         messages = messages_for(m, query)
         meta = {"engine": self.engine, "model_id": self.model_id, "requested_revision": m.get("revision"),
                 "seed_requested": seed, "messages": messages}
-        if self.engine == "api":
-            options = m.get("api", {})
-            request = {"model": self.model_id, "messages": messages}
-            if options.get("send_sampling_parameters", True):
-                request.update(temperature=g["temperature"], top_p=g["top_p"])
-            if options.get("supports_seed", False):
-                request["seed"] = seed
-            request[options.get("max_tokens_field", "max_tokens")] = g["max_new_tokens"]
-            extra = options.get("request_kwargs", {})
-            if set(extra) & set(request):
-                raise ValueError("api.request_kwargs may not override recorded generation fields")
-            request.update(extra)
-            result = self.client.chat.completions.create(**request)
-            choice, usage = result.choices[0], result.usage
-            meta.update(request=request, seed_applied="seed" in request, served_model=result.model,
-                        system_fingerprint=getattr(result, "system_fingerprint", None),
-                        prompt_tokens=getattr(usage, "prompt_tokens", None),
-                        completion_tokens=getattr(usage, "completion_tokens", None), finish_reason=choice.finish_reason,
-                        usage=usage.model_dump() if usage else None)
-            return choice.message.content or "", meta
         template = getattr(self.tok, "chat_template", None)
         if not template and m.get("system_prompt"):
             raise ValueError("system_prompt requires a chat template")
@@ -85,25 +68,62 @@ class Generator:
         # Already-formatted chat prompts include special tokens. Do not add them twice.
         ids = self.tok.encode(formatted, add_special_tokens=not bool(template))
         meta.update(prompt_token_ids_hash=digest(ids), prompt_tokens=len(ids))
-        if self.engine == "vllm":
-            from vllm import SamplingParams
-            p = SamplingParams(n=1, temperature=g["temperature"], top_p=g["top_p"],
-                               max_tokens=g["max_new_tokens"], seed=seed)
-            meta["sampling_params"] = str(p)
-            out = self.llm.generate([{"prompt_token_ids": ids}], p, use_tqdm=False)[0].outputs[0]
-            meta.update(completion_tokens=len(out.token_ids), finish_reason=out.finish_reason)
-            return out.text, meta
+        return ids, meta
+
+    def generate_batch(self, items):
+        """items: [(query, seed)] -> [(text, metadata) or Exception], in order."""
+        self._load()
+        g = self.generation
+        prepared = []
+        for query, seed in items:
+            try:
+                prepared.append(self._prompt(query, seed))
+            except Exception as e:  # one malformed prompt must not sink the batch
+                prepared.append(e)
+        if self.engine != "vllm":
+            return [p if isinstance(p, Exception) else self._hf(*p, seed=s) for p, (_, s) in zip(prepared, items)]
+        from vllm import SamplingParams
+        live = [(i, p) for i, p in enumerate(prepared) if not isinstance(p, Exception)]
+        params = [SamplingParams(n=1, temperature=g["temperature"], top_p=g["top_p"], max_tokens=g["max_new_tokens"],
+                                 seed=items[i][1]) for i, _ in live]
+        start = time.perf_counter()
+        try:
+            outputs = self.llm.generate([{"prompt_token_ids": p[0]} for _, p in live], params, use_tqdm=False) if live else []
+        except Exception as e:
+            return [p if isinstance(p, Exception) else e for p in prepared]
+        per_sample = (time.perf_counter() - start) / max(len(live), 1)
+        results = list(prepared)
+        for (i, (_, meta)), out, p in zip(live, outputs, params):
+            o = out.outputs[0]
+            results[i] = (o.text, {**meta, "sampling_params": str(p), "completion_tokens": len(o.token_ids),
+                                   "finish_reason": o.finish_reason, "batch_size": len(live),
+                                   "batch_seconds_per_sample": per_sample})
+        return results
+
+    def _hf(self, ids, meta, seed):
         import torch
         from transformers import set_seed
-        set_seed(seed)
-        inputs = torch.tensor([ids], device=self.llm.device)
-        kwargs = {"max_new_tokens": g["max_new_tokens"], "do_sample": g["temperature"] > 0}
-        if kwargs["do_sample"]:
-            kwargs.update(temperature=g["temperature"], top_p=g["top_p"])
-        meta["effective_generation"] = {**self.llm.generation_config.to_dict(), **kwargs}
-        with torch.inference_mode():
-            seq = self.llm.generate(input_ids=inputs, attention_mask=torch.ones_like(inputs),
-                                    pad_token_id=self.tok.eos_token_id, **kwargs)[0, len(ids):]
-        meta.update(completion_tokens=len(seq), finish_reason="length" if len(seq) == g["max_new_tokens"] else "stop",
-                    resolved_revision=getattr(self.llm.config, "_commit_hash", None))
-        return self.tok.decode(seq, skip_special_tokens=True), meta
+        g = self.generation
+        try:
+            set_seed(seed)
+            inputs = torch.tensor([ids], device=self.llm.device)
+            kwargs = {"max_new_tokens": g["max_new_tokens"], "do_sample": g["temperature"] > 0}
+            if kwargs["do_sample"]:
+                kwargs.update(temperature=g["temperature"], top_p=g["top_p"])
+            meta["effective_generation"] = {**self.llm.generation_config.to_dict(), **kwargs}
+            start = time.perf_counter()
+            with torch.inference_mode():
+                seq = self.llm.generate(input_ids=inputs, attention_mask=torch.ones_like(inputs),
+                                        pad_token_id=self.tok.eos_token_id, **kwargs)[0, len(ids):]
+            meta.update(completion_tokens=len(seq), finish_reason="length" if len(seq) == g["max_new_tokens"] else "stop",
+                        resolved_revision=getattr(self.llm.config, "_commit_hash", None), batch_size=1,
+                        batch_seconds_per_sample=time.perf_counter() - start)
+            return self.tok.decode(seq, skip_special_tokens=True), meta
+        except Exception as e:
+            return e
+
+    def __call__(self, query, seed):
+        out = self.generate_batch([(query, seed)])[0]
+        if isinstance(out, Exception):
+            raise out
+        return out

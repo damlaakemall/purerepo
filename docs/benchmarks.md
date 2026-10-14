@@ -23,7 +23,8 @@ Every router is trained and tested on a **frozen `Benchmark`** ([`data/benchmark
 | `synthetic` | 4 toy models | 10 | simulated BARTScore-like | simulated | 4k | tests, learning, CPU smoke runs |
 | `mixinstruct` | 12 open LLMs (2023) | 1 | BARTScore | parameter count (proxy) | 16k | Hybrid LLM's original setting |
 | `routerbench` | 11 incl. GPT-4, Claude, Mixtral | 1 | 0/1 correctness | real USD | 36k | multi-model routers, real prices |
-| `ours_v1` | Qwen2.5 0.5–7B, Llama-3.1-8B (draft) | 10 | BARTScore / exact match / MC accuracy per source | ∝ params × tokens | 10k (draft) | **main comparison**, built on Tosun |
+| `ours_v1` | Qwen2.5 0.5–7B, Llama-3.1-8B (draft) | 10 | BARTScore / exact match / MC accuracy per source | ∝ params × tokens | 10k (draft) | earlier draft, kept for existing runs |
+| `shared_v1` | 9 open-weight (Qwen3, Gemma 4, Cogito, R1-Distill, Granite, Qwen3.6-27B) | 10 | ground truth (0/1, token F1) and ArmoRM, separate views | ∝ active params × tokens | ~7.6k | **main comparison**: the team's version of SU Lab LLM-Routing-Project, built on Tosun ([protocol](shared_protocol.md)) |
 
 ## Building our benchmark (`ours_v1`)
 

@@ -30,10 +30,13 @@ Start with the [team guide (Türkçe)](docs/team_workflow.md),
 llmr smoke-pipeline --output /tmp/llmr-shared-smoke  # test doubles only; no models or training
 ```
 
-`configs/benchmarks/shared_v1.yaml` and `configs/model_pools/team.yaml` are explicit
-drafts: agree the pool/cost definition and pin the `PIN_*` revisions before real
-collection. RouteLLM, GraphRouter, UniRoute, BEST-Route, MixLLM and PILOT are future
-paper implementations, not new routers delivered by this change.
+Everything runs on Sabancı's Tosun GPUs; no paid APIs. `configs/benchmarks/shared_v1.yaml`
+(GSM8K, MMLU-Pro, BBH, OlympiadBench, MBPP, Alpaca, Multi-News; k = 10) and
+`configs/model_pools/team.yaml` (the reference repo's 9 open-weight models) are pinned to
+HF commits. Ground truth uses the reference repo's audited evaluators. Planned routers:
+RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT (next to Hybrid LLM); the
+release carries what each needs (per-sample cost, ArmoRM selector, latency), see the
+router contract.
 
 ## How it fits together
 

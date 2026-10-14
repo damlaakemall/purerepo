@@ -99,6 +99,12 @@ def run_experiment(cfg: dict) -> dict:
     t0 = time.time()
     router.fit(train, val)
     fit_seconds = time.time() - t0
+    eval_models = router.evaluation_models()
+    if eval_models:
+        if not set(eval_models) <= set(models):
+            raise ValueError(f"evaluation models {eval_models} are not candidates {models}")
+        models, test = list(eval_models), test.select_models(list(eval_models))
+        print(f"[run] evaluating on the router's test pool: {models}")
 
     results, curve_rows = [], []
     m, rows = evaluate_router(router, test)
@@ -106,7 +112,7 @@ def run_experiment(cfg: dict) -> dict:
                     "is_baseline": False, "fit_seconds": fit_seconds, **m, "learned": router.describe()})
     curve_rows += rows
     for b in cfg.get("baselines", []):
-        bcfg = {"type": b, "models": cfg["router"].get("models")}
+        bcfg = {"type": b, "models": eval_models or cfg["router"].get("models")}
         if b == "oracle":
             bcfg["models"] = models
         elif b == "random_binary" and not isinstance(router, BinaryRouter):

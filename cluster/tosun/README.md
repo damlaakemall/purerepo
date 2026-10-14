@@ -2,28 +2,30 @@
 
 Tosun uses the **SLURM** scheduler: you submit jobs with `sbatch` from the login node. Your home directory is `/cta/users/<username>/`. Accounts are requested through SUTicket (FENS → HPC); see the [SU HPC QuickStart](https://su-hpc-tutorials.readthedocs.io/).
 
-## 0. One-time: fill in site settings
+## 0. Site settings (already filled in)
 
-On the login node:
+[`config.sh`](config.sh) holds the settings SU Lab LLM-Routing-Project runs with on Tosun: partition and QOS `cuda`,
+modules `python/3.12.9` and `cuda/12.8`, nodes `cn05,cn06` excluded, a Python venv (no conda). Override any of
+them from the environment, e.g. `LLMR_GPU_TYPE=a100` to request a specific card. To see what each node has:
 
 ```bash
-sinfo -o "%P %G %l %D"     # partitions, GPU types (gres), time limits, node counts
-module avail               # available modules (anaconda / cuda names)
+sinfo -p cuda -o "%20N %12G %8m %t"
 ```
 
-Then edit the `TODO`s in [`config.sh`](config.sh): the GPU partition, `--account`/`--qos` if required, the GPU `gres` string, module names, and the data and model-cache locations (use scratch if home space is small; models take tens of GB). Commit the file so the whole team shares it.
+Model weights for the 9-model pool take ~250 GB: point `HF_HOME` at scratch if your home quota is small.
+No paid APIs are used; everything runs on Tosun GPUs.
 
 ## 1. One-time: environment
 
 ```bash
 cd /cta/users/$USER && git clone https://github.com/damlaakemall/purerepo.git && cd purerepo
-bash cluster/tosun/setup_env.sh
-conda activate llmr
-wandb login                 # experiment tracking
-huggingface-cli login       # gated models (Llama 3.1) + pushing/pulling benchmarks
+bash cluster/tosun/setup_env.sh      # venv, torch for CUDA 12.8, the package, vLLM
+hf auth login                        # model downloads + pushing/pulling releases
+wandb login                          # experiment tracking (optional)
 ```
 
-Llama-3.1 is a gated model: accept its license on its Hugging Face page with the same account first.
+GPU jobs check `torch.cuda.is_available()` first (`llmr_require_gpu`): a torch built for a newer CUDA than the
+driver would otherwise run on CPU, ~750x slower, and die on the wall clock hours later.
 
 ## 2. Build our benchmark (once per benchmark version)
 
@@ -56,12 +58,13 @@ llmr leaderboard            # -> results/leaderboard.md, commit it
 ## Interactive GPU session (debugging)
 
 ```bash
-srun --partition=<gpu_partition> --gres=gpu:1 --mem=32G --time=01:00:00 --pty bash
+srun --partition=cuda --qos=cuda --gres=gpu:1 --mem=32G --time=01:00:00 --pty bash
 ```
 
 ## Independent shared-v1 member jobs
 
 For the new protocol use `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` after
-freezing/sharing the dataset. It submits generation, separate GT/ArmoRM scoring, and
-packaging; it never submits router training. The older `submit_pipeline.sh` continues
+freezing/sharing the dataset. It requests the model's `gpus` (2 for the 27B and 26B-A4B models), then runs
+GT (CPU) and ArmoRM (1 GPU) scoring in parallel and packages the shard; it never submits router training.
+`LLMR_BATCH_SIZE` (default 256) is how many requests go to vLLM at once. The older `submit_pipeline.sh` continues
 to serve the original ours_v1/ours_dev configs. See [team workflow](../../docs/team_workflow.md).

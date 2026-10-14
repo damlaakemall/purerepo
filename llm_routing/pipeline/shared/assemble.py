@@ -22,6 +22,10 @@ def release_spec(cfg):
     return {k: v for k, v in cfg.items() if k not in ("path", "hub_repo", "hub_revision", "contribution_paths", "quality_metric")}
 
 
+# Benchmark extra name -> long-table column, written into every view (see data/benchmark.py).
+SAMPLE_EXTRAS = {"sample_cost": "cost", "completion_tokens": "completion_tokens", "seconds": "seconds"}
+
+
 def frozen_dir(cfg):
     version = cfg["version"]
     if not version or Path(version).name != version or version in (".", ".."):
@@ -173,7 +177,7 @@ def assemble(cfg):
                     missing.append((k, "generation"))
                     continue
                 for channel in required:
-                    if channel == "ground_truth" and not q.get("ground_truth_scorer"):
+                    if channel == "ground_truth" and not q.get("answer_type"):
                         continue
                     if not scores[channel].get(k, {}).get("success"):
                         missing.append((k, channel))
@@ -191,6 +195,7 @@ def assemble(cfg):
                         "model_spec_json": json.dumps(models[k[1]], sort_keys=True),
                         "prompt_tokens": r["metadata"].get("prompt_tokens"),
                         "completion_tokens": r["metadata"].get("completion_tokens"),
+                        "seconds": r["metadata"].get("batch_seconds_per_sample"),
                         "input_cost": costs[0], "output_cost": costs[1],
                         "cost": sum(costs) if costs[0] is not None else None,
                         "metadata_json": json.dumps(r["metadata"], sort_keys=True),
@@ -204,12 +209,16 @@ def assemble(cfg):
     shape = len(rows), len(names), max_k
     arrays = {c: np.full(shape, np.nan, dtype=np.float32) for c in scores}
     costs = np.full(shape[:2], np.nan, dtype=np.float32)
+    per_sample = {name: np.full(shape, np.nan, dtype=np.float32) for name in SAMPLE_EXTRAS}
     qi, mi = {r["id"]: i for i, r in enumerate(rows)}, {m: j for j, m in enumerate(names)}
     for r in records:
         i, j, sid = qi[r["query_id"]], mi[r["model"]], r["sample_id"]
         for c in arrays:
             if r[c] is not None:
                 arrays[c][i, j, sid] = r[c]
+        for name, column in SAMPLE_EXTRAS.items():
+            if r[column] is not None:
+                per_sample[name][i, j, sid] = r[column]
         if sid == 0 and r["cost"] is not None:
             costs[i, j] = r["cost"]  # realized sample 0, never mean cost of a different sample
     wide = derive_wide(long, rows, names)
@@ -224,12 +233,16 @@ def assemble(cfg):
                 shutil.copytree(bundle, tmp / "inputs" / f"bundle-{i:05d}", ignore=shutil.ignore_patterns(".cache"))
             write_json(tmp / "config.json", cfg)
             for channel, values in arrays.items():
+                # Each view carries the other quality channel (a best-of-n selector, e.g. ArmoRM picking
+                # the sample whose ground truth is then scored) and the per-sample cost/length/latency.
+                extras = {**per_sample, **{other: v for other, v in arrays.items() if other != channel}}
                 b = Benchmark(cfg["name"], [r["id"] for r in rows], [r["query"] for r in rows], names, values, costs,
                               np.array([r["split"] for r in rows]), sources=[r["source"] for r in rows],
                               references=[r["reference"] for r in rows],
                               meta={"protocol": PROTOCOL, "version": cfg["version"], "dataset_id": dataset["dataset_id"],
                                     "metric": channel, "cost_unit": "USD" if definition == "usd_tokens" else "token_proxy",
-                                    "cost_definition": cfg["cost"], "ragged": True, "missing_samples": "NaN padding; never a negative label"})
+                                    "cost_definition": cfg["cost"], "ragged": True, "missing_samples": "NaN padding; never a negative label"},
+                              extras=extras)
                 b.save(str(tmp / "views" / channel), with_responses=False)
             seal(tmp, {"protocol": PROTOCOL, "version": cfg["version"], "dataset_id": dataset["dataset_id"],
                        "models": names, "config_hash": digest(release_spec(cfg)), "n_rows": len(long), "missing_items": len(missing),
@@ -287,6 +300,11 @@ def validate_release(path):
                 raise ValueError("long/view quality mismatch")
             if s == 0 and not np.isclose(b.costs[i, j], r["cost"], equal_nan=True):
                 raise ValueError("long/view cost mismatch")
+            expected = {**SAMPLE_EXTRAS, **{c: c for c in ("ground_truth", "armorm") if c != channel}}
+            for name, column in expected.items():
+                value = r.get(column)
+                if not np.isclose(b.extras[name][i, j, s], np.nan if value is None else value, equal_nan=True):
+                    raise ValueError(f"long/view extra mismatch: {name}")
     return man
 
 

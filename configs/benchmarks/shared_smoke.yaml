@@ -16,7 +16,7 @@ sources:
     n: 30
     query_template: "{question}"
     reference_field: answer
-    ground_truth_scorer: exact_match_number
+    answer_type: numeric
 models:
   - {name: tiny, model_id: synthetic/tiny, generation: {k: 3}, cost_per_1k_tokens: 1.0}
   - {name: large, model_id: synthetic/large, generation: {k: 1}, cost_per_1k_tokens: 3.0}
