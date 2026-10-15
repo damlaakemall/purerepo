@@ -1,6 +1,6 @@
 # Pilot run of shared_v1 on Tosun: same sources, revisions, prompts, generation and scoring settings,
 # but 4 queries per source (BBH: 3 tasks x 2) and k = 2, i.e. 30 queries. Run it before the full collection
-# to catch setup, download and scoring problems in minutes. See docs/walkthrough/04_tosunda_calistirma.md.
+# to catch setup, download and scoring problems in minutes. See docs/walkthrough/01_egitim_verisi.md.
 protocol: shared-v1
 name: shared_pilot
 version: pilot-0

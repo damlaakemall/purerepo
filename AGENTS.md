@@ -22,7 +22,7 @@ A **learning project** at Sabancı University. The team re-implements LLM routin
 | `configs/` | `benchmarks/` (`shared_v1.yaml` is the main one), `model_pools/team.yaml` (12 models), `routers/`, `experiments/` |
 | `cluster/tosun/` | SLURM scripts for Tosun; start with its README |
 | `docs/` | concepts, evaluation, protocol, router contract, team guide, paper explainer template |
-| `docs/walkthrough/` | step-by-step "how we did it and why" write-ups (Turkish), one per project step, with a real run |
+| `docs/walkthrough/` | "how we did it and why" write-ups (Turkish), one cohesive doc per project step, with a real run |
 | `DECISIONS.md` | decided and open team decisions; check it before changing anything that affects the data or the comparison |
 
 Docs language: concept docs are in English; `docs/team_workflow.md`, `docs/shared_protocol.md`, `docs/router_contract.md` and `docs/walkthrough/` are in Turkish.
@@ -51,7 +51,7 @@ CI (`.github/workflows/`) runs these three. Real generation and scoring only run
 ## When finishing a project step
 
 The team learns from the repo, not only uses it. When a step is finished (a collection, an assembly, a router, a
-comparison), add or update its write-up in `docs/walkthrough/` from `_sablon.md`: the final procedure (not a trial
+comparison), add or update its single write-up in `docs/walkthrough/` from `_sablon.md` (one doc per step, its parts as sections): the final procedure (not a trial
 log), why each choice was made, how it was run on Tosun, and how the result was checked, with real commands and
 numbers. Fix any doc the step made stale.
 

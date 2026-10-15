@@ -30,7 +30,7 @@ GPU jobs check `torch.cuda.is_available()` first (`llmr_require_gpu`): a torch b
 driver would otherwise run on CPU, ~750x slower, and die on the wall clock hours later. Tosun's driver is 570
 (CUDA 12.x), so `setup_env.sh` pins vLLM and torch builds for CUDA 12.9. Start with the 30-query pilot
 (`configs/benchmarks/shared_pilot.yaml`); the whole procedure, explained step by step with a real run, is in
-[docs/walkthrough/04_tosunda_calistirma.md](../../docs/walkthrough/04_tosunda_calistirma.md) (Turkish).
+[docs/walkthrough/01_egitim_verisi.md](../../docs/walkthrough/01_egitim_verisi.md) (Turkish).
 
 ## 2. Build a benchmark with the older single-user pipeline (`ours_v1` / `ours_dev`)
 

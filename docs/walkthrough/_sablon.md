@@ -1,15 +1,15 @@
-# NN. Adımın adı
+# Adım N: adımın adı
 
-> Bu adımın tek cümlelik amacı: neyi üretiyor, bir sonraki adım ondan neyi kullanıyor.
+> Bu adım neyi üretiyor, bir sonraki adım ondan neyi kullanıyor. **Durum:** tarih, ne doğrulandı, ne bekliyor.
 
-## Ne yapıyoruz
+## Büyük resim
 
-Adımın son hali, sırasıyla. Girdisi ne, çıktısı ne, hangi komut/dosya.
+Adımın akışı tek bir şemada: hangi alt adımlar, hangi komut, ne çıkıyor.
 
-## Neden böyle
+## 1. Birinci alt adım
 
-Her önemli seçim ve gerekçesi (referans repo, makale, donanım, maliyet, adillik kuralı). Seçmediğimiz
-belirgin alternatif varsa neden seçmediğimiz.
+Ne yapıyoruz ve **neden böyle** (referans repo, makale, donanım, maliyet, adillik kuralı). Seçmediğimiz
+belirgin bir alternatif varsa neden seçmediğimiz. Her alt adım için bir bölüm.
 
 ## Nasıl çalıştırdık
 

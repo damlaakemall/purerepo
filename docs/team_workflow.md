@@ -34,7 +34,7 @@ llmr build-queries configs/benchmarks/shared_v1.yaml
 ```
 
 Bu komut dataset'leri indirir ve MiniLM ile yakın kopyaları gruplar, generation yapmaz; login node'un bellek
-sınırı yüzünden `sbatch` ile compute node'da çalıştırın ([anlatım](walkthrough/01_soru_seti.md#nasıl-çalıştırdık)). Dataset
+sınırı yüzünden `sbatch` ile compute node'da çalıştırın ([anlatım](walkthrough/01_egitim_verisi.md#3-cevap-üretme-tosunda-bir-modeli-çalıştırmak)). Dataset
 `$LLMR_DATA_ROOT/benchmarks/shared_v1/dataset/` altında bir kez donar; üyeler bu klasörün
 byte-identical kopyasını kullanır (paylaşımlı Tosun dizini veya rsync). Dataset tekrar
 üretilmez. Üye-model atamalarını ekip kayıtlarında tutun; model adlarını değiştirmeyin.
@@ -43,8 +43,7 @@ byte-identical kopyasını kullanır (paylaşımlı Tosun dizini veya rsync). Da
 
 Kurulum bir kez, compute node'da: `setup_env.sh` (venv, CUDA 12.9 torch ve vLLM; Tosun sürücüsü 570). İlk iş
 küçük bir pilot olsun: `configs/benchmarks/shared_pilot.yaml` (30 soru, k = 2). Bütün akışın gerçek bir
-koşuyla anlatımı: [Tosun'da çalıştırma](walkthrough/04_tosunda_calistirma.md),
-[sonuçları okuma](walkthrough/05_sonuclari_okuma.md).
+koşuyla anlatımı: [Adım 1: eğitim verisi](walkthrough/01_egitim_verisi.md).
 
 ```bash
 bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v1.yaml smollm3-3b ibrahim 4

@@ -2,7 +2,7 @@
 
     python cluster/tosun/inspect_shard.py CONFIG MODEL MEMBER [--num-shards N --shard-index I] [--show-failed K]
 
-Prints what docs/walkthrough/05_sonuclari_okuma.md walks through: how responses ended (stop / length,
+Prints what docs/walkthrough/01_egitim_verisi.md (section 5) walks through: how responses ended (stop / length,
 reasoning trace closed or cut off), GT per source with its evaluation modes, ArmoRM and BARTScore per
 source, ArmoRM on GT-correct vs GT-wrong answers, and the last lines of a few GT-failed answers to read.
 Reads files only; loads no model.
