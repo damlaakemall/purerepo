@@ -15,7 +15,9 @@ export LLMR_PARTITION="${LLMR_PARTITION:-cuda}"
 export LLMR_QOS="${LLMR_QOS:-cuda}"
 export LLMR_ACCOUNT="${LLMR_ACCOUNT:-}"
 export LLMR_GPU_TYPE="${LLMR_GPU_TYPE:-}"                       # e.g. a100 -> --gres=gpu:a100:N; empty = any GPU
-export LLMR_EXCLUDE="${LLMR_EXCLUDE:-cn05,cn06}"                # nodes the reference repo keeps its jobs off
+# K80 (cn05,cn06; also excluded by the reference repo) and V100 (cn04,cn11,gpu01) cards have no bf16, which every
+# pool model and ArmoRM load in. Left: RTX PRO 6000 96 GB, A100 80 GB, H200, A30/A5000/RTX 4500 24 GB, A4000 16 GB.
+export LLMR_EXCLUDE="${LLMR_EXCLUDE:-cn04,cn05,cn06,cn11,gpu01}"
 
 # --gres string for N GPUs: llmr_gres 2 -> gpu:2 (or gpu:a100:2)
 llmr_gres() {
@@ -25,7 +27,11 @@ llmr_gres() {
 llmr_load_modules() {
   module purge 2>/dev/null || true
   module load python/3.12.9
-  module load cuda/12.8
+  module load cuda/12.8 2>/dev/null || true   # refuses to load on the (GPU-less) login node; jobs get it
+  # python/3.12.9's _sqlite3 is linked (RPATH) to a 2020 libsqlite3 without sqlite3_deserialize, so
+  # `import sqlite3` fails, and vLLM imports it. Preload the sqlite module's newer library instead.
+  module load sqlite/3.46.0-36f2sjv
+  export LD_PRELOAD="$(dirname "$(command -v sqlite3)")/../lib/libsqlite3.so${LD_PRELOAD:+:$LD_PRELOAD}"
 }
 
 llmr_activate() {
