@@ -39,7 +39,9 @@ if TYPE_CHECKING:  # type hints only; avoids a core <-> data import cycle
 class Decision:
     knob: float
     choice: np.ndarray  # (N,) int
-    cost: np.ndarray  # (N,) float
+    cost: np.ndarray  # (N,) float: all generation + selector + escalation costs paid
+    sample_index: np.ndarray | None = None  # returned sample per query (default: sample 0)
+    trace: list[dict] | None = None  # optional paid calls/feedback events, for future online methods
 
 
 class Router(ABC):
@@ -56,6 +58,14 @@ class Router(ABC):
     def describe(self) -> dict:
         """Hyperparameters / learned values worth logging (e.g. t* in Hybrid LLM)."""
         return {}
+
+    def evaluation_models(self) -> list[str] | None:
+        """Models the router may route to at test time, known after ``fit``. None = every candidate.
+
+        A dynamic-pool router (UniRoute) trains on one set of LLMs and is tested on unseen ones; the
+        runner then scores it, the single models and every baseline on that subset only.
+        """
+        return None
 
 
 class BinaryRouter(Router):

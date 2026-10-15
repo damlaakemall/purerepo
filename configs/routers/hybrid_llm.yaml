@@ -1,9 +1,0 @@
-# Hybrid LLM (Ding et al., ICLR 2024). Binary: choose small vs large per query.
-type: hybrid_llm
-models: {small: alpaca-native, large: vicuna-13b-1.1}
-params:
-  mode: trans             # det | prob | trans
-  estimator: all_pairs    # how Pr[H >= -t] is estimated from k samples: all_pairs | paired
-  t: null                 # null = choose t* automatically (r_trans)
-encoder:                  # the paper: DeBERTa-v3-large fine-tuned with soft-label BCE
-  backend: tfidf          # tfidf (CPU, fast) | transformer (paper setup, GPU)

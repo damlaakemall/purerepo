@@ -80,6 +80,13 @@ def run_experiment(cfg: dict) -> dict:
     models = candidate_models(router, bench)
     sub = bench.select_models(models)
     train, val, test = sub.split("train"), sub.split("val"), sub.split("test")
+    coverage = None
+    if bench.meta.get("protocol") == "shared-v1":
+        from .pipeline.shared.evaluate import complete_cohort
+        before = {s: len(sub.split(s)) for s in ("train", "val", "test")}
+        train, val, test = (complete_cohort(b) for b in (train, val, test))
+        coverage = {s: {"available": before[s], "scored": len(b), "query_ids": b.query_ids}
+                    for s, b in zip(("train", "val", "test"), (train, val, test))}
     print(f"[run] {cfg['name']}  benchmark={bench.name} ({fp})  models={models}  "
           f"train/val/test={len(train)}/{len(val)}/{len(test)}")
 
@@ -92,6 +99,12 @@ def run_experiment(cfg: dict) -> dict:
     t0 = time.time()
     router.fit(train, val)
     fit_seconds = time.time() - t0
+    eval_models = router.evaluation_models()
+    if eval_models:
+        if not set(eval_models) <= set(models):
+            raise ValueError(f"evaluation models {eval_models} are not candidates {models}")
+        models, test = list(eval_models), test.select_models(list(eval_models))
+        print(f"[run] evaluating on the router's test pool: {models}")
 
     results, curve_rows = [], []
     m, rows = evaluate_router(router, test)
@@ -99,7 +112,7 @@ def run_experiment(cfg: dict) -> dict:
                     "is_baseline": False, "fit_seconds": fit_seconds, **m, "learned": router.describe()})
     curve_rows += rows
     for b in cfg.get("baselines", []):
-        bcfg = {"type": b, "models": cfg["router"].get("models")}
+        bcfg = {"type": b, "models": eval_models or cfg["router"].get("models")}
         if b == "oracle":
             bcfg["models"] = models
         elif b == "random_binary" and not isinstance(router, BinaryRouter):
@@ -112,7 +125,8 @@ def run_experiment(cfg: dict) -> dict:
 
     singles = single_model_points(test)
     record = {"experiment": cfg["name"], "benchmark": bench.name, "fingerprint": fp, "seed": cfg["seed"],
-              "models": models, "num_test": len(test), "num_train": len(train),
+              "quality_metric": bench.meta.get("metric"), "cost_unit": bench.meta.get("cost_unit"),
+              "coverage": coverage, "models": models, "num_test": len(test), "num_train": len(train),
               "single_models": {k: {"cost": c, "quality": q} for k, (c, q) in singles.items()},
               "oracle_point": dict(zip(("cost", "quality"), oracle_point(test))), "results": results,
               "run_dir": run_dir}

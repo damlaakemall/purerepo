@@ -61,7 +61,6 @@ def test_aiq_constant_curve():
 
 
 @pytest.mark.parametrize("cfg", [
-    {"type": "hybrid_llm", "models": {"small": "small", "large": "large"}, "params": {"mode": "prob"}},
     {"type": "quality_regression", "models": None},
     {"type": "random_binary", "models": {"small": "tiny", "large": "large"}},
 ])
@@ -81,7 +80,7 @@ def test_every_router_produces_valid_decisions(cfg, bench):
 
 
 def test_registry_lists_routers():
-    assert {"hybrid_llm", "oracle", "quality_regression", "random_binary"} <= set(list_routers())
+    assert {"oracle", "quality_regression", "random_binary"} <= set(list_routers())
 
 
 def test_experiment_configs_load():
@@ -94,11 +93,11 @@ def test_experiment_configs_load():
 def test_end_to_end_run(tmp_path):
     from llm_routing.runner import run_experiment
     cfg = load_experiment(os.path.join(os.path.dirname(__file__), "..", "configs", "experiments",
-                                       "hybrid_llm__synthetic.yaml"),
+                                       "quality_regression__synthetic.yaml"),
                           [f"output_dir={tmp_path}/runs", f"benchmark.path={tmp_path}/bench", "benchmark.params.n=800"])
     rec = run_experiment(cfg)
     assert os.path.exists(os.path.join(rec["run_dir"], "metrics.json"))
-    assert {r["router"] for r in rec["results"]} >= {"hybrid_llm/r_trans", "random", "oracle"}
+    assert {r["router"] for r in rec["results"]} >= {"quality_regression", "oracle"}
 
 
 def test_scorers():
@@ -106,3 +105,27 @@ def test_scorers():
     assert em(["so the answer is 1,234."], ["blah #### 1234"]).tolist() == [1.0]
     mc = get_scorer("multiple_choice")
     assert mc(["The answer is B because"], ["B"]).tolist() == [1.0]
+
+
+def test_router_test_pool_restricts_evaluation_and_baselines(tmp_path):
+    from llm_routing.registry import register_router
+    from llm_routing.routers.baselines import QualityRegressionRouter
+    from llm_routing.runner import run_experiment
+
+    @register_router("_test_pool_router")
+    class PoolRouter(QualityRegressionRouter):
+        def fit(self, train, val=None):
+            self.test_pool = list(train.models[1:])  # trained on all, tested on unseen LLMs only
+            self.models = self.test_pool
+            return super().fit(train.select_models(self.test_pool), val)
+
+        def evaluation_models(self):
+            return self.test_pool
+
+    cfg = load_experiment(os.path.join(os.path.dirname(__file__), "..", "configs", "experiments",
+                                       "quality_regression__synthetic.yaml"),
+                          [f"output_dir={tmp_path}/runs", f"benchmark.path={tmp_path}/bench", "benchmark.params.n=600",
+                           "router.type=_test_pool_router"])
+    cfg["baselines"] = ["oracle", "quality_regression"]
+    rec = run_experiment(cfg)
+    assert rec["models"] == list(rec["single_models"]) and len(rec["models"]) == 3

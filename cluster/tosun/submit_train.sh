@@ -5,5 +5,5 @@ set -euo pipefail
 source "$(dirname "$0")/config.sh"
 CFG="$1"; SEEDS="${2:-3}"; shift; [ $# -gt 0 ] && shift
 mkdir -p logs
-sbatch --partition="$LLMR_PARTITION" ${LLMR_ACCOUNT:+--account=$LLMR_ACCOUNT} ${LLMR_QOS:+--qos=$LLMR_QOS} \
-  --gres="$LLMR_GPU_GRES" --array=0-$((SEEDS-1)) cluster/tosun/jobs/train.sbatch "$CFG" "$@"
+sbatch --partition="$LLMR_PARTITION" ${LLMR_ACCOUNT:+--account=$LLMR_ACCOUNT} ${LLMR_QOS:+--qos=$LLMR_QOS} ${LLMR_EXCLUDE:+--exclude=$LLMR_EXCLUDE} \
+  --gres="$(llmr_gres 1)" --array=0-$((SEEDS-1)) cluster/tosun/jobs/train.sbatch "$CFG" "$@"

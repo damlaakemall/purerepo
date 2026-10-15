@@ -34,9 +34,22 @@ if TYPE_CHECKING:  # type hints only; avoids a core <-> data import cycle
 
 def curve(decisions: list[Decision], bench: Benchmark) -> np.ndarray:
     """(P, 2) array of (cost, quality) per operating point."""
-    q = bench.realized()
     rows = np.arange(len(bench))
-    return np.array([[float(np.mean(d.cost)), float(np.nanmean(q[rows, d.choice]))] for d in decisions])
+    points = []
+    for d in decisions:
+        choice = np.asarray(d.choice)
+        sample = np.zeros(len(bench), dtype=int) if d.sample_index is None else np.asarray(d.sample_index)
+        cost = np.asarray(d.cost)
+        if (choice.shape != (len(bench),) or sample.shape != choice.shape or cost.shape != choice.shape
+                or choice.dtype.kind not in "iu" or sample.dtype.kind not in "iu"
+                or (choice < 0).any() or (choice >= bench.num_models).any()
+                or (sample < 0).any() or (sample >= bench.k).any()):
+            raise ValueError("invalid returned model/sample indices or decision dimensions")
+        quality = bench.scores[rows, choice, sample]
+        if not np.isfinite(quality).all() or not np.isfinite(cost).all() or (cost < 0).any():
+            raise ValueError("evaluation needs a fixed complete cohort; missing quality/cost may not disappear from the denominator")
+        points.append([float(cost.mean()), float(quality.mean())])
+    return np.array(points)
 
 
 def single_model_points(bench: Benchmark) -> dict[str, tuple[float, float]]:

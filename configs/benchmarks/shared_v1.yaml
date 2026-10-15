@@ -1,0 +1,112 @@
+# The team's shared benchmark: our version of SU Lab LLM-Routing-Project, collected on Tosun.
+# Prompt mix as in the reference: 5 sources with checkable gold + 2 free-text sources (token F1).
+# Every dataset revision below is a pinned HF commit (2026-10-15). Existing ours_v1/ours_dev and
+# public benchmarks stay intact.
+protocol: shared-v1
+name: shared_v1
+version: v1
+loader: generated
+path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/shared_v1
+hub_repo: null
+hub_revision: null
+seed: 42
+splits: {train: 0.6, val: 0.1, test: 0.3}   # the reference repo's 60/10/30, within every source
+# As in the reference: prompts whose MiniLM embeddings have cosine >= 0.99 form one group, and a group
+# always lands in a single split (no near-duplicate twin across train/test). Needs transformers at build-queries.
+near_duplicates:
+  method: embedding        # exact = identical normalised text only, no model
+  threshold: 0.99
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  revision: 1110a243fdf4706b3f48f1d95db1a4f5529b4d41
+ood_datasets: []           # sources sent entirely to test
+model_pool: configs/model_pools/team.yaml
+quality_metric: ground_truth
+allow_partial: false
+required_scores: [ground_truth, armorm, bartscore]
+sources:
+  - name: gsm8k
+    hf_id: openai/gsm8k
+    hf_config: main
+    hf_split: test
+    revision: 740312add88f781978c0658806c59bc2815b9866
+    n: 1319
+    formatter: gsm8k
+  - name: mmlu_pro
+    hf_id: TIGER-Lab/MMLU-Pro
+    hf_split: test
+    revision: b189ec765aa7ed75c8acfea42df31fdae71f97be
+    id_field: question_id
+    n: 1500
+    formatter: mmlu_pro
+  - name: bbh
+    hf_id: lukaemon/bbh
+    hf_config: [boolean_expressions, causal_judgement, date_understanding, disambiguation_qa, dyck_languages,
+                formal_fallacies, geometric_shapes, hyperbaton, logical_deduction_five_objects,
+                logical_deduction_seven_objects, logical_deduction_three_objects, movie_recommendation,
+                multistep_arithmetic_two, navigate, object_counting, penguins_in_a_table,
+                reasoning_about_colored_objects, ruin_names, salient_translation_error_detection, snarks,
+                sports_understanding, temporal_sequences, tracking_shuffled_objects_five_objects,
+                tracking_shuffled_objects_seven_objects, tracking_shuffled_objects_three_objects, web_of_lies,
+                word_sorting]
+    hf_split: test
+    revision: 982bb89fd79532a8ac676a61fc42eb1aeec63f99
+    n_per_config: 80      # 27 tasks x 80 = 2160, as in the reference
+    formatter: bbh
+  - name: olympiadbench
+    hf_id: Hothan/OlympiadBench
+    hf_config: OE_TO_maths_en_COMP   # text-only, English, open-ended competition maths
+    hf_split: train
+    revision: 91184b52131e7fc9455fef848035173aea8cc01a
+    id_field: id
+    n: 674
+    formatter: olympiadbench
+  - name: mbpp
+    hf_id: google-research-datasets/mbpp
+    hf_config: full
+    hf_split: test
+    revision: 4bb6404fdc6cacfda99d4ac4205087b89d32030c
+    id_field: task_id
+    n: 500
+    formatter: mbpp
+  - name: alpaca
+    hf_id: tatsu-lab/alpaca
+    hf_split: train
+    revision: dce01c9b08f87459cf36a430d809084718273017
+    n: 1000
+    formatter: alpaca
+  - name: multi_news
+    hf_id: alexfabbri/multi_news
+    hf_split: test
+    # main is a loading script that current `datasets` refuses to run; this is the Hub's parquet
+    # conversion of the same commit (refs/convert/parquet).
+    revision: 4b42aeea3ec9fb96cdadd37e25e635d36b540713
+    data_files: {test: default/test/*.parquet}
+    n: 500
+    max_query_chars: 12000   # stays inside ArmoRM's context with the summary; longer ones are dropped, never cut
+    formatter: multi_news
+generation:
+  engine: vllm             # hf is the fallback when vLLM does not support a model yet
+  k: 10                    # samples per (query, model), as in the reference; best-of-n routers need them
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 4096     # reasoning models spend most of it thinking; 512 truncates their answers
+scoring:
+  ground_truth: {text_policy: strip_think, mbpp_timeout: 5}
+  armorm:
+    model_id: RLHFlow/ArmoRM-Llama3-8B-v0.1
+    revision: eb2676d20da2f2d41082289d23c59b9f7427f955
+    # As the reference: the whole 8B model on one GPU. "auto" silently offloads layers to CPU on a
+    # small card (~20 s per sample, a job that never finishes); this fails with OOM instead.
+    device_map: {"": 0}
+    text_policy: strip_think
+  # BARTScore as in SU Lab LLM-Routing-Project: sum of log p(response | prompt) under BART-large, on
+  # every response. A quality channel for Hybrid LLM; no reference answer involved.
+  bartscore:
+    model_name: facebook/bart-large
+    revision: cb48c1365bd826bd521f650dc2e0940aee54720c
+    max_length: 512
+    text_policy: strip_think
+cost:
+  definition: token_proxy  # parameter-count proxy, NOT USD; see configs/model_pools/team.yaml
+  snapshot_date: "2026-10-15"
+  note: "cost_per_1k_tokens = parameters (B), all models dense. Local Tosun GPUs only, no API prices. DECISIONS.md #2."

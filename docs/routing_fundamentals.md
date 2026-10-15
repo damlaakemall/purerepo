@@ -8,7 +8,7 @@ Given a query and a pool of LLMs with different costs and abilities, **choose wh
 
 ## Design axes (use these to compare papers)
 
-| axis | options | Hybrid LLM |
+| axis | options | example: Hybrid LLM (planned) |
 |---|---|---|
 | **When is the decision made?** | *pre-generation routing* (only sees query) · *cascade* (generate with cheap model, check, maybe escalate) · *post-hoc selection / ensembling* (generate with all, pick best) | pre-generation |
 | **How many models?** | binary (small/large) · N models | binary |

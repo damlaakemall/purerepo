@@ -3,17 +3,17 @@
 An experiment file points to one benchmark config and one router config and may
 override any field of either:
 
-    # configs/experiments/hybrid_llm__mixinstruct.yaml
-    name: hybrid_llm_trans__mixinstruct
+    # configs/experiments/quality_regression__routerbench.yaml
+    name: quality_regression
     seed: 0
-    benchmark: configs/benchmarks/mixinstruct.yaml
-    router: configs/routers/hybrid_llm.yaml
+    benchmark: configs/benchmarks/routerbench.yaml
+    router: configs/routers/quality_regression.yaml
     overrides:
-      router: {params: {mode: trans}}
-    baselines: [random_binary, oracle]
+      router: {params: {alpha: 1.0}}
+    baselines: [oracle]
     wandb: {enabled: false, project: llm-routing}
 
-Command-line overrides use dot notation:  router.params.mode=prob  seed=1
+Command-line overrides use dot notation:  router.params.alpha=0.5  seed=1
 ``${oc.env:LLMR_DATA_ROOT,data}`` in any path reads an environment variable
 (used on the cluster to put data on scratch storage).
 """
@@ -48,11 +48,22 @@ def load_experiment(path: str, cli_overrides: list[str] | None = None) -> dict:
     cfg.setdefault("baselines", [])
     cfg.setdefault("wandb", {"enabled": False})
     cfg.setdefault("output_dir", "runs")
-    return OmegaConf.to_container(cfg, resolve=True)
+    return _with_model_pool(OmegaConf.to_container(cfg, resolve=True))
 
 
 def load_benchmark_config(path: str, cli_overrides: list[str] | None = None) -> dict:
     cfg = load_yaml(path)
     if cli_overrides:
         cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(cli_overrides))
-    return OmegaConf.to_container(cfg, resolve=True)
+    return _with_model_pool(OmegaConf.to_container(cfg, resolve=True))
+
+
+def _with_model_pool(cfg):
+    """Allow a shared YAML model pool without changing existing inline configs."""
+    benchmark = cfg.get("benchmark", cfg)
+    if isinstance(benchmark, dict) and benchmark.get("model_pool"):
+        if "models" in benchmark:
+            raise ValueError("use model_pool or inline models, not both")
+        pool = OmegaConf.to_container(load_yaml(benchmark["model_pool"]), resolve=True)
+        benchmark["models"] = pool["models"]
+    return cfg

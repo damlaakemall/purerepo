@@ -16,6 +16,11 @@ On disk (one directory per benchmark):
     scores.npy           float32 (N, M, k)  quality of k sampled responses, NaN = missing
     costs.npy            float32 (N, M)     cost of answering query n with model m
     responses/<m>.jsonl  optional response texts (needed by cascade routers)
+    extras/<name>.npy    optional per-sample arrays (N, M, k), NaN = missing. The shared-v1 release writes
+                         sample_cost        realized cost of every sample (best-of-n pays for n samples)
+                         armorm / ground_truth   the OTHER quality channel (e.g. a best-of-n selector)
+                         completion_tokens  output length per sample
+                         seconds            GPU wall-clock share per sample (latency-aware routers)
 """
 
 from __future__ import annotations
@@ -50,6 +55,7 @@ class Benchmark:
     references: list[str] | None = None
     meta: dict = field(default_factory=dict)
     responses: dict[str, list[list[str]]] | None = None  # model -> N x k texts
+    extras: dict[str, np.ndarray] = field(default_factory=dict)  # name -> (N, M, k) per-sample arrays
 
     def __post_init__(self):
         self.scores = np.asarray(self.scores, dtype=np.float32)
@@ -60,9 +66,20 @@ class Benchmark:
             self.costs = np.broadcast_to(self.costs, (len(self.queries), len(self.models))).copy()
         self.split_of = np.asarray(self.split_of)
         n, m = len(self.queries), len(self.models)
-        assert self.scores.shape[:2] == (n, m), (self.scores.shape, n, m)
-        assert self.costs.shape == (n, m)
-        assert len(self.query_ids) == n == len(self.split_of)
+        if self.scores.ndim != 3 or self.scores.shape[:2] != (n, m) or self.scores.shape[2] < 1:
+            raise ValueError("scores must have shape (queries, models, samples)")
+        if self.costs.shape != (n, m) or len(self.query_ids) != n or len(self.split_of) != n:
+            raise ValueError("benchmark dimensions disagree")
+        if len(set(self.query_ids)) != n or len(set(self.models)) != m:
+            raise ValueError("query IDs and model names must be unique")
+        if not set(self.split_of) <= set(SPLITS):
+            raise ValueError("unknown split name")
+        if np.isinf(self.scores).any() or np.isinf(self.costs).any() or (self.costs < 0).any():
+            raise ValueError("scores/costs cannot be infinite; costs cannot be negative")
+        self.extras = {k: np.asarray(v, dtype=np.float32) for k, v in (self.extras or {}).items()}
+        for name, value in self.extras.items():
+            if not re.fullmatch(r"[A-Za-z0-9_]+", name) or value.shape != (n, m, self.scores.shape[2]):
+                raise ValueError(f"extra {name!r} must be a simple name with shape (queries, models, samples)")
 
     # ---- shape ---------------------------------------------------------------
     def __len__(self):
@@ -91,6 +108,7 @@ class Benchmark:
             self.name, pick(self.query_ids), pick(self.queries), list(self.models), self.scores[idx],
             self.costs[idx], self.split_of[idx], pick(self.sources), pick(self.references), dict(self.meta),
             None if self.responses is None else {m: pick(r) for m, r in self.responses.items()},
+            {k: v[idx] for k, v in self.extras.items()},
         )
 
     def split(self, name: str) -> "Benchmark":
@@ -100,7 +118,8 @@ class Benchmark:
         j = [self.model_index(n) for n in names]
         b = Benchmark(self.name, self.query_ids, self.queries, list(names), self.scores[:, j], self.costs[:, j],
                       self.split_of, self.sources, self.references, dict(self.meta),
-                      None if self.responses is None else {m: self.responses[m] for m in names if m in self.responses})
+                      None if self.responses is None else {m: self.responses[m] for m in names if m in self.responses},
+                      {k: v[:, j] for k, v in self.extras.items()})
         return b
 
     def pair(self, small: str, large: str) -> RoutingDataset:
@@ -110,13 +129,25 @@ class Benchmark:
                               meta={"benchmark": self.name})
 
     # ---- integrity -----------------------------------------------------------
-    def fingerprint(self) -> str:
+    def _legacy_fingerprint(self) -> str:
         h = hashlib.sha256()
         h.update("\n".join(self.query_ids).encode())
         h.update("\n".join(self.models).encode())
         h.update("\n".join(map(str, self.split_of)).encode())
         h.update(np.ascontiguousarray(self.scores).tobytes())
         h.update(np.ascontiguousarray(self.costs).tobytes())
+        return h.hexdigest()[:16]
+
+    def fingerprint(self) -> str:
+        h = hashlib.sha256(self._legacy_fingerprint().encode())
+        h.update(json.dumps({"queries": self.queries, "sources": self.sources,
+                             "references": self.references,
+                             "protocol": {k: self.meta.get(k) for k in
+                                          ("metric", "cost_unit", "cost_definition", "version", "dataset_id")}},
+                            sort_keys=True, ensure_ascii=False).encode())
+        for name in sorted(self.extras):  # absent extras leave older fingerprints unchanged
+            h.update(name.encode())
+            h.update(np.ascontiguousarray(self.extras[name]).tobytes())
         return h.hexdigest()[:16]
 
     def summary(self) -> dict:
@@ -146,7 +177,19 @@ class Benchmark:
                 with open(os.path.join(path, "responses", safe_name(m) + ".jsonl"), "w") as f:
                     for qid, r in zip(self.query_ids, resp):
                         f.write(json.dumps({"id": qid, "responses": r}, ensure_ascii=False) + "\n")
-        manifest = {"name": self.name, "models": self.models, "k": self.k, "num_queries": len(self),
+        if self.extras:
+            os.makedirs(os.path.join(path, "extras"), exist_ok=True)
+            for name, value in self.extras.items():
+                np.save(os.path.join(path, "extras", name + ".npy"), value)
+        from ..pipeline.shared.io import file_hash
+        from pathlib import Path
+        artifacts = [Path(path) / n for n in ("queries.jsonl", "scores.npy", "costs.npy")]
+        artifacts += [Path(path) / "extras" / (name + ".npy") for name in self.extras]
+        if with_responses and self.responses:
+            artifacts += [Path(path) / "responses" / (safe_name(m) + ".jsonl") for m in self.responses]
+        outputs = {p.relative_to(path).as_posix(): {"sha256": file_hash(p)} for p in artifacts}
+        manifest = {"fingerprint_version": 2, "outputs": outputs, "name": self.name, "models": self.models, "k": self.k, "num_queries": len(self),
+                    "extras": sorted(self.extras),
                     "fingerprint": self.fingerprint(), "meta": self.meta}
         with open(os.path.join(path, "manifest.json"), "w") as f:
             json.dump(manifest, f, indent=2)
@@ -155,6 +198,10 @@ class Benchmark:
     def load(cls, path: str, with_responses: bool = False) -> "Benchmark":
         with open(os.path.join(path, "manifest.json")) as f:
             man = json.load(f)
+        extra_names = man.get("extras", [])
+        if man.get("outputs"):
+            from ..pipeline.shared.io import verify
+            verify(path, ("queries.jsonl", "scores.npy", "costs.npy", *(f"extras/{n}.npy" for n in extra_names)))
         ids, qs, splits, srcs, refs = [], [], [], [], []
         with open(os.path.join(path, "queries.jsonl")) as f:
             for line in f:
@@ -177,8 +224,10 @@ class Benchmark:
         b = cls(man["name"], ids, qs, man["models"], np.load(os.path.join(path, "scores.npy")),
                 np.load(os.path.join(path, "costs.npy")), np.array(splits),
                 srcs if any(s is not None for s in srcs) else None,
-                refs if any(r is not None for r in refs) else None, man.get("meta", {}), responses)
-        if man.get("fingerprint") and man["fingerprint"] != b.fingerprint():
+                refs if any(r is not None for r in refs) else None, man.get("meta", {}), responses,
+                {n: np.load(os.path.join(path, "extras", n + ".npy")) for n in extra_names})
+        expected = b.fingerprint() if man.get("fingerprint_version") == 2 else b._legacy_fingerprint()
+        if man.get("fingerprint") and man["fingerprint"] != expected:
             raise ValueError(f"benchmark at {path} does not match its manifest fingerprint — data was modified")
         return b
 

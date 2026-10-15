@@ -10,3 +10,15 @@ __pycache__/
 slurm-*.out
 /logs/
 *.egg-info/
+
+# Shared collections and weights belong on Tosun / the dataset Hub.
+/outputs/
+*.parquet
+*.npy
+*.npz
+*.safetensors
+*.pt
+*.pth
+*.jsonl
+!tests/fixtures/**/*.jsonl
+!examples/**/*.jsonl

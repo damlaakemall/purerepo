@@ -20,21 +20,40 @@ def main(argv=None):
     sub = p.add_subparsers(dest="cmd", required=True)
 
     t = sub.add_parser("train"); t.add_argument("config"); t.add_argument("overrides", nargs="*")
-    for name in ("prepare", "info", "build-queries", "assemble", "push-data", "pull-data"):
+    for name in ("prepare", "info", "build-queries", "assemble", "push-data", "pull-data", "validate-data", "evaluate-data"):
         s = sub.add_parser(name); s.add_argument("config"); s.add_argument("overrides", nargs="*")
         if name == "prepare":
             s.add_argument("--rebuild", action="store_true")
-    for name in ("generate", "score"):
+    for name in ("generate", "score", "package-contribution"):
         s = sub.add_parser(name); s.add_argument("config"); s.add_argument("--model", required=True)
         s.add_argument("overrides", nargs="*")
+        s.add_argument("--member")
+        s.add_argument("--shard-index", type=int)
+        s.add_argument("--num-shards", type=int)
+        if name == "score":
+            s.add_argument("--scorer", choices=["ground_truth", "armorm", "bartscore"])
+        if name == "generate":
+            s.add_argument("--max-retries", type=int)
+            s.add_argument("--retry-delay", type=float)
+            s.add_argument("--batch-size", type=int, help="requests per vLLM call (throughput only)")
     lb = sub.add_parser("leaderboard"); lb.add_argument("--runs", default="runs")
     lb.add_argument("--out", default="results/leaderboard.md")
     sub.add_parser("routers")
-    a = p.parse_args(argv)
+    smoke = sub.add_parser("smoke-pipeline")
+    smoke.add_argument("--output", required=True)
+    a, extras = p.parse_known_args(argv)
+    # argparse otherwise rejects dotlist overrides placed after optional flags.
+    if extras:
+        if not hasattr(a, "overrides") or any(x.startswith("-") or "=" not in x for x in extras):
+            p.error("unrecognized arguments: " + " ".join(extras))
+        a.overrides.extend(extras)
 
     from .config import load_benchmark_config, load_experiment
 
-    if a.cmd == "train":
+    if a.cmd == "smoke-pipeline":
+        from .pipeline.shared.smoke import run_smoke
+        run_smoke(a.output)
+    elif a.cmd == "train":
         from .runner import run_experiment
 
         run_experiment(load_experiment(a.config, a.overrides))
@@ -57,14 +76,26 @@ def main(argv=None):
             from .pipeline.build import build_queries
 
             build_queries(cfg)
+        elif a.cmd == "validate-data":
+            from .pipeline.shared.assemble import frozen_dir, validate_release
+            print(json.dumps(validate_release(frozen_dir(cfg)), indent=2))
+        elif a.cmd == "evaluate-data":
+            from .pipeline.shared.evaluate import evaluate_data
+            print(json.dumps(evaluate_data(cfg), indent=2))
+        elif a.cmd == "package-contribution":
+            from .pipeline.shared.assemble import package
+            options = {k: getattr(a, k) for k in ("member", "shard_index", "num_shards") if getattr(a, k) is not None}
+            print(package(cfg, a.model, **options))
         elif a.cmd == "generate":
             from .pipeline.build import generate
 
-            generate(cfg, a.model)
+            options = {k: getattr(a, k) for k in ("member", "shard_index", "num_shards", "max_retries", "retry_delay", "batch_size") if getattr(a, k) is not None}
+            generate(cfg, a.model, **options)
         elif a.cmd == "score":
             from .pipeline.build import score
 
-            score(cfg, a.model)
+            options = {k: getattr(a, k) for k in ("member", "shard_index", "num_shards", "scorer") if getattr(a, k) is not None}
+            score(cfg, a.model, **options)
         elif a.cmd == "assemble":
             from .pipeline.build import assemble
 
@@ -72,11 +103,21 @@ def main(argv=None):
         elif a.cmd == "push-data":
             from .data.hub import push
 
-            push(cfg["path"], cfg["hub_repo"])
+            if cfg.get("protocol") == "shared-v1":
+                from .pipeline.shared.assemble import frozen_dir
+                push(str(frozen_dir(cfg)), cfg["hub_repo"])
+            else:
+                push(cfg["path"], cfg["hub_repo"])
         elif a.cmd == "pull-data":
             from .data.hub import pull
 
-            pull(cfg["hub_repo"], cfg["path"], cfg.get("hub_revision"))
+            if cfg.get("protocol") == "shared-v1":
+                from .pipeline.shared.assemble import frozen_dir
+                if not cfg.get("hub_revision"):
+                    raise ValueError("shared releases require a pinned hub_revision commit")
+                pull(cfg["hub_repo"], str(frozen_dir(cfg)), cfg["hub_revision"])
+            else:
+                pull(cfg["hub_repo"], cfg["path"], cfg.get("hub_revision"))
 
 
 if __name__ == "__main__":
