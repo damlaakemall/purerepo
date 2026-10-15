@@ -5,7 +5,8 @@ Tosun uses the **SLURM** scheduler: you submit jobs with `sbatch` from the login
 ## 0. Site settings (already filled in)
 
 [`config.sh`](config.sh) holds the settings SU Lab LLM-Routing-Project runs with on Tosun: partition and QOS `cuda`,
-modules `python/3.12.9` and `cuda/12.8`, nodes `cn05,cn06` excluded, a Python venv (no conda). Override any of
+modules `python/3.12.9` and `cuda/12.8`, a Python venv (no conda). Nodes without bf16 (V100, K80) and cn14 (16 GB
+A4000) are excluded. Override any of
 them from the environment, e.g. `LLMR_GPU_TYPE=a100` to request a specific card. To see what each node has:
 
 ```bash
@@ -19,13 +20,17 @@ No paid APIs are used; everything runs on Tosun GPUs.
 
 ```bash
 cd /cta/users/$USER && git clone https://github.com/damlaakemall/purerepo.git && cd purerepo
-bash cluster/tosun/setup_env.sh      # venv, torch for CUDA 12.8, the package, vLLM
+mkdir -p logs   # setup runs on a compute node: the login node's memory limit kills pip while installing torch
+sbatch -p cuda --qos=cuda -c 8 --mem=32G -t 2:00:00 -o logs/setup_env-%j.out --wrap "bash cluster/tosun/setup_env.sh"
 hf auth login                        # model downloads + pushing/pulling releases; accept the Llama and Gemma licenses on huggingface.co first
 wandb login                          # experiment tracking (optional)
 ```
 
 GPU jobs check `torch.cuda.is_available()` first (`llmr_require_gpu`): a torch built for a newer CUDA than the
-driver would otherwise run on CPU, ~750x slower, and die on the wall clock hours later.
+driver would otherwise run on CPU, ~750x slower, and die on the wall clock hours later. Tosun's driver is 570
+(CUDA 12.x), so `setup_env.sh` pins vLLM and torch builds for CUDA 12.9. Start with the 30-query pilot
+(`configs/benchmarks/shared_pilot.yaml`); the whole procedure, explained step by step with a real run, is in
+[docs/walkthrough/04_tosunda_calistirma.md](../../docs/walkthrough/04_tosunda_calistirma.md) (Turkish).
 
 ## 2. Build a benchmark with the older single-user pipeline (`ours_v1` / `ours_dev`)
 

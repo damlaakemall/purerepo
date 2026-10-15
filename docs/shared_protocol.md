@@ -144,8 +144,8 @@ score, objective rewards, gating ağırlıkları ve evaluator template hash'i sa
 Context aşımı sessiz truncation yerine hata olur (Multi-News bu yüzden
 `max_query_chars` ile önceden süzülür; uzun örnekler kesilmez, atlanır). ArmoRM
 response üretmez veya router training yapmaz. `trust_remote_code=True` sabit
-revision ile kullanılır. Bu kod GPU'da henüz gerçek ArmoRM ile çalıştırılmadı; ilk
-küçük Tosun koşusunda bağımlılık uyumluluğu kontrol edilmelidir.
+revision ile kullanılır. Tosun pilotunda (2026-10-15) gerçek ArmoRM ile çalıştı ve referans repo'nun
+fonksiyonuyla 60 cevapta aynı skoru verdi ([anlatım](walkthrough/03_skorlama.md)).
 
 **BARTScore**, referans repo nasıl hesaplıyorsa öyle hesaplanır (`bart_scoring_pipeline.py`):
 `facebook/bart-large` (sabit revision) ile prompt verildiğinde cevabın token log-olasılıklarının

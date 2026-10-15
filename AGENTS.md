@@ -22,9 +22,10 @@ A **learning project** at Sabancı University. The team re-implements LLM routin
 | `configs/` | `benchmarks/` (`shared_v1.yaml` is the main one), `model_pools/team.yaml` (12 models), `routers/`, `experiments/` |
 | `cluster/tosun/` | SLURM scripts for Tosun; start with its README |
 | `docs/` | concepts, evaluation, protocol, router contract, team guide, paper explainer template |
+| `docs/walkthrough/` | step-by-step "how we did it and why" write-ups (Turkish), one per project step, with a real run |
 | `DECISIONS.md` | decided and open team decisions; check it before changing anything that affects the data or the comparison |
 
-Docs language: concept docs are in English; `docs/team_workflow.md`, `docs/shared_protocol.md` and `docs/router_contract.md` are in Turkish.
+Docs language: concept docs are in English; `docs/team_workflow.md`, `docs/shared_protocol.md`, `docs/router_contract.md` and `docs/walkthrough/` are in Turkish.
 
 ## Commands
 
@@ -46,6 +47,13 @@ CI (`.github/workflows/`) runs these three. Real generation and scoring only run
 4. **Quality channels stay separate.** Ground truth, ArmoRM and BARTScore are separate views; never fill a missing GT with another score. Paper-specific labels are built inside the router package (`labels.py`), never written into the shared data.
 5. **Costs are a token proxy** (parameters × tokens), not USD. Don't report them as dollars.
 6. Don't commit `data/`, `runs/`, `outputs/`, weights, parquet or jsonl (except test fixtures).
+
+## When finishing a project step
+
+The team learns from the repo, not only uses it. When a step is finished (a collection, an assembly, a router, a
+comparison), add or update its write-up in `docs/walkthrough/` from `_sablon.md`: the final procedure (not a trial
+log), why each choice was made, how it was run on Tosun, and how the result was checked, with real commands and
+numbers. Fix any doc the step made stale.
 
 ## When adding a router
 

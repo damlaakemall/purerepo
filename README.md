@@ -15,6 +15,8 @@ Implementations of LLM **routing** papers, written to understand *what* each rou
 
 **Open team decisions:** [DECISIONS.md](DECISIONS.md) (LLM pool for our benchmark, cost proxy, …).
 
+**How we did it (Türkçe):** [docs/walkthrough/](docs/walkthrough/README.md) explains each finished project step in its final form: which tests and why, which models and why, how answers are scored, how a model is run on Tosun, and how results are read and checked, each with a real run. A new write-up is added as each step is finished.
+
 **Start here:** [routing fundamentals](docs/routing_fundamentals.md) → [how routers are compared](docs/comparison.md) → [benchmarks & fairness rules](docs/benchmarks.md) → [metrics](docs/evaluation.md) → [current leaderboard](results/leaderboard.md).
 
 ## Team collection protocol

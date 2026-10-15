@@ -16,8 +16,9 @@ export LLMR_QOS="${LLMR_QOS:-cuda}"
 export LLMR_ACCOUNT="${LLMR_ACCOUNT:-}"
 export LLMR_GPU_TYPE="${LLMR_GPU_TYPE:-}"                       # e.g. a100 -> --gres=gpu:a100:N; empty = any GPU
 # K80 (cn05,cn06; also excluded by the reference repo) and V100 (cn04,cn11,gpu01) cards have no bf16, which every
-# pool model and ArmoRM load in. Left: RTX PRO 6000 96 GB, A100 80 GB, H200, A30/A5000/RTX 4500 24 GB, A4000 16 GB.
-export LLMR_EXCLUDE="${LLMR_EXCLUDE:-cn04,cn05,cn06,cn11,gpu01}"
+# pool model and ArmoRM load in. cn14 is excluded too: a job there may get its 16 GB A4000, too small for an 8B model.
+# Left: RTX PRO 6000 96 GB, A100 80 GB, H200 141 GB, A5000/RTX 4500 24 GB.
+export LLMR_EXCLUDE="${LLMR_EXCLUDE:-cn04,cn05,cn06,cn11,cn14,gpu01}"
 
 # --gres string for N GPUs: llmr_gres 2 -> gpu:2 (or gpu:a100:2)
 llmr_gres() {

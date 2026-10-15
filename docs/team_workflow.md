@@ -33,17 +33,18 @@ source cluster/tosun/config.sh && llmr_activate
 llmr build-queries configs/benchmarks/shared_v1.yaml
 ```
 
-Bu komut dataset'leri indirir (login node'da yeterli), generation yapmaz. Dataset
+Bu komut dataset'leri indirir ve MiniLM ile yakın kopyaları gruplar, generation yapmaz; login node'un bellek
+sınırı yüzünden `sbatch` ile compute node'da çalıştırın ([anlatım](walkthrough/01_soru_seti.md#nasıl-çalıştırdık)). Dataset
 `$LLMR_DATA_ROOT/benchmarks/shared_v1/dataset/` altında bir kez donar; üyeler bu klasörün
 byte-identical kopyasını kullanır (paylaşımlı Tosun dizini veya rsync). Dataset tekrar
 üretilmez. Üye-model atamalarını ekip kayıtlarında tutun; model adlarını değiştirmeyin.
 
 ## 3. Üye: sadece atandığın modeli üret
 
-Kurulum bir kez: `bash cluster/tosun/setup_env.sh` (venv, CUDA 12.8 torch, vLLM).
-ArmoRM ve vLLM bu repoda henüz gerçek GPU'da çalıştırılmadı: ilk iş küçük bir pilot
-olsun (ör. `n` değerleri küçük bir kopya config ile tek shard) ve `pip freeze` ile GPU
-bilgisini saklayın.
+Kurulum bir kez, compute node'da: `setup_env.sh` (venv, CUDA 12.9 torch ve vLLM; Tosun sürücüsü 570). İlk iş
+küçük bir pilot olsun: `configs/benchmarks/shared_pilot.yaml` (30 soru, k = 2). Bütün akışın gerçek bir
+koşuyla anlatımı: [Tosun'da çalıştırma](walkthrough/04_tosunda_calistirma.md),
+[sonuçları okuma](walkthrough/05_sonuclari_okuma.md).
 
 ```bash
 bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v1.yaml smollm3-3b ibrahim 4
