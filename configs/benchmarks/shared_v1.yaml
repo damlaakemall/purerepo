@@ -10,11 +10,19 @@ path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/shared_v1
 hub_repo: null
 hub_revision: null
 seed: 42
-splits: {train: 0.6, val: 0.1, test: 0.3}   # the reference repo's 60/10/30
+splits: {train: 0.6, val: 0.1, test: 0.3}   # the reference repo's 60/10/30, within every source
+# As in the reference: prompts whose MiniLM embeddings have cosine >= 0.99 form one group, and a group
+# always lands in a single split (no near-duplicate twin across train/test). Needs transformers at build-queries.
+near_duplicates:
+  method: embedding        # exact = identical normalised text only, no model
+  threshold: 0.99
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  revision: 1110a243fdf4706b3f48f1d95db1a4f5529b4d41
+ood_datasets: []           # sources sent entirely to test
 model_pool: configs/model_pools/team.yaml
 quality_metric: ground_truth
 allow_partial: false
-required_scores: [ground_truth, armorm]
+required_scores: [ground_truth, armorm, bartscore]
 sources:
   - name: gsm8k
     hf_id: openai/gsm8k
@@ -88,6 +96,13 @@ scoring:
     model_id: RLHFlow/ArmoRM-Llama3-8B-v0.1
     revision: eb2676d20da2f2d41082289d23c59b9f7427f955
     device_map: auto
+    text_policy: strip_think
+  # BARTScore as in SU Lab LLM-Routing-Project: sum of log p(response | prompt) under BART-large, on
+  # every response. A quality channel for Hybrid LLM; no reference answer involved.
+  bartscore:
+    model_name: facebook/bart-large
+    revision: cb48c1365bd826bd521f650dc2e0940aee54720c
+    max_length: 512
     text_policy: strip_think
 cost:
   definition: token_proxy  # parameter-count proxy, NOT USD; see configs/model_pools/team.yaml

@@ -23,7 +23,10 @@ def model_pool(cfg):
 
 
 def specification(cfg):
-    return {k: cfg[k] for k in ("name", "version", "sources", "splits", "seed")}
+    spec = {k: cfg[k] for k in ("name", "version", "sources", "splits", "seed")}
+    # How splits are drawn is part of the dataset's identity, like the ratios.
+    spec.update(near_duplicates=cfg.get("near_duplicates", {"method": "exact"}), ood_datasets=cfg.get("ood_datasets", []))
+    return spec
 
 
 def dataset_dir(cfg):
@@ -81,7 +84,8 @@ def _row(src, ex):
     return out
 
 
-def build_queries(cfg):
+def build_queries(cfg, embed=None):
+    """Freeze the prompt set and its splits. ``embed`` replaces the near-duplicate embedder (tests)."""
     model_pool(cfg)
     target = dataset_dir(cfg)
     if target.exists():
@@ -112,7 +116,7 @@ def build_queries(cfg):
             if src.get("max_query_chars") and len(query) > src["max_query_chars"]:
                 skipped["too_long"] += 1  # e.g. Multi-News beyond the ArmoRM context: dropped, never truncated
                 continue
-            # Global normalized-text grouping: an exact duplicate (Alpaca has some) enters once, in one split.
+            # An exact duplicate (Alpaca has some) enters once, whatever its source.
             group = re.sub(r"\s+", " ", query.lower()).strip()
             if group in seen:
                 skipped["duplicate"] += 1
@@ -121,11 +125,9 @@ def build_queries(cfg):
             original_id = ex.get(src["id_field"]) if src.get("id_field") else (
                 f"{ex['_config']}/{ex['_row']}" if "_row" in ex else ex.get("id"))
             qid = src["name"] + "/" + digest({"id": original_id, "query": query})[:24]
-            u = int(digest([cfg["seed"], group])[:16], 16) / 2**64
-            split = "train" if u < fractions["train"] else ("val" if u < fractions["train"] + fractions["val"] else "test")
             rows.append({"id": qid, "query": query, "reference": row.get("reference", ""), "gold": row["gold"],
                          "answer_type": row["answer_type"], "aux": row.get("aux") or {},
-                         "gt_dataset": row.get("gt_dataset", src["name"]), "source": src["name"], "split": split,
+                         "gt_dataset": row.get("gt_dataset", src["name"]), "source": src["name"], "split": None,
                          "original_id": original_id})
             taken += 1
             counts[group_key] = counts.get(group_key, 0) + 1
@@ -134,6 +136,15 @@ def build_queries(cfg):
     rows.sort(key=lambda r: r["id"])
     if not rows or len({r["id"] for r in rows}) != len(rows):
         raise ValueError("empty dataset or duplicate query IDs")
+    # Splits as in the reference repo: near-duplicate groups first, then 60/10/30 within each source.
+    from .splits import group_stats, near_duplicate_groups, stratified_splits
+    nd = dict(specification(cfg)["near_duplicates"])
+    groups = near_duplicate_groups([r["id"] for r in rows], [r["query"] for r in rows], embed=embed, **nd)
+    split_of = stratified_splits({r["id"]: r["source"] for r in rows}, fractions, cfg["seed"], groups,
+                                 specification(cfg)["ood_datasets"])
+    for r in rows:
+        r["split"] = split_of[r["id"]]
+    duplicates = group_stats(groups)
     target.parent.mkdir(parents=True, exist_ok=True)
     with locked(target.parent / ".dataset.lock"):
         if target.exists():
@@ -145,6 +156,7 @@ def build_queries(cfg):
             write_json(tmp / "splits.json", {s: [r["id"] for r in rows if r["split"] == s] for s in fractions})
             write_json(tmp / "config.json", specification(cfg))
             seal(tmp, {"protocol": PROTOCOL, "dataset_id": digest(rows), "spec_hash": digest(specification(cfg)),
-                       "sources": source_meta, "n_queries": len(rows)})
+                       "sources": source_meta, "n_queries": len(rows), "near_duplicates": duplicates})
             tmp.rename(target)
-    print(f"[build-queries] {len(rows)} frozen queries -> {target}")
+    print(f"[build-queries] {len(rows)} frozen queries -> {target}; near-duplicate groups: "
+          f"{duplicates['n_groups_with_duplicates']} ({duplicates['n_prompts_in_duplicate_groups']} prompts)")

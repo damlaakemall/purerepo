@@ -7,7 +7,7 @@ import re
 import time
 from pathlib import Path
 
-from . import PROTOCOL
+from . import CHANNELS, PROTOCOL, is_scored
 from .backends import Generator
 from .dataset import load_dataset, model_pool
 from .io import append, digest, environment, key, locked, read_jsonl, recover_tail, successful, write_json
@@ -165,9 +165,41 @@ class ArmoRM:
                                          "chat_template_hash": digest(self.tok.chat_template), "tokens": tokens.shape[-1]}
 
 
+class BARTScore:
+    """BARTScore exactly as SU Lab LLM-Routing-Project computes it (data_generator/scoring/bart_scoring_pipeline.py).
+
+        score = sum_t log p(y_t | y_<t, x)     x = prompt, y = response, under facebook/bart-large
+
+    No reference answer is involved: it measures how likely BART finds the response given the prompt.
+    The sum (not the mean) runs over the response tokens, so longer responses score lower; read it
+    together with completion_tokens. Prompt and response are each truncated to 512 BART tokens.
+    """
+    def __init__(self, model_name="facebook/bart-large", revision=None, max_length=512):
+        import torch
+        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+        if not revision or revision.startswith("PIN_"):
+            raise ValueError("pin scoring.bartscore.revision before a BARTScore run")
+        self.max_length = max_length
+        self.tok = AutoTokenizer.from_pretrained(model_name, revision=revision)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(
+            model_name, revision=revision, dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+            device_map="auto" if torch.cuda.is_available() else None).eval()
+
+    def __call__(self, prompt, response):
+        import torch
+        device = next(self.model.parameters()).device
+        inputs = self.tok(prompt, return_tensors="pt", truncation=True, max_length=self.max_length).to(device)
+        labels = self.tok(text_target=response, return_tensors="pt", truncation=True,
+                          max_length=self.max_length)["input_ids"].to(device)
+        with torch.inference_mode():
+            loss = self.model(**inputs, labels=labels).loss  # mean token cross-entropy
+        # mean cross-entropy x number of target tokens = minus the summed log-probability
+        return -float(loss.float().item()) * labels.shape[1], {"target_tokens": int(labels.shape[1])}
+
+
 def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_shards=1, evaluator=None):
-    if scorer not in ("ground_truth", "armorm"):
-        raise ValueError("scorer must be ground_truth or armorm")
+    if scorer not in CHANNELS:
+        raise ValueError(f"scorer must be one of {CHANNELS}")
     path, queries, spec = job_spec(cfg, model, member, shard_index, num_shards)
     by_id = {r["id"]: r for r in queries}
     options = dict(cfg.get("scoring", {}).get(scorer, {}))
@@ -197,15 +229,19 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
                     raise ValueError("stale score bound to a different response")
                 continue
             query = by_id[r["query_id"]]
-            if scorer == "ground_truth" and not query.get("answer_type"):
-                continue  # unavailable is null, never a fabricated correctness label
+            if not is_scored(scorer, query):
+                continue  # unavailable is null, never a fabricated label
             record = {"query_id": k[0], "model": k[1], "sample_id": k[2], "response_hash": r["response_hash"],
                       "dataset_id": spec["dataset_id"], "evaluator_id": evaluator_id, "evaluator": evaluator_spec, "environment": scoring_environment}
             if scorer == "armorm" and evaluator is None:
                 evaluator = ArmoRM(**options)
+            if scorer == "bartscore" and evaluator is None:
+                evaluator = BARTScore(**options)
             try:
                 text = answer_text(r["response"], policy)
                 if scorer == "armorm":
+                    value, details = evaluator(query["query"], text)
+                elif scorer == "bartscore":
                     value, details = evaluator(query["query"], text)
                 else:
                     from ..ground_truth import score_query

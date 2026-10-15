@@ -9,6 +9,7 @@ import numpy as np
 from ...core.base import Decision
 from ...core.evaluation import curve, oracle_point, single_model_points
 from ...routers.baselines import OracleRouter
+from . import channels
 from .assemble import frozen_dir, load_view
 from .io import digest, write_json
 
@@ -25,7 +26,7 @@ def evaluate_data(cfg):
     output.mkdir(parents=True, exist_ok=True)
     reports = {}
     curve_rows = []
-    for metric in ("ground_truth", "armorm"):
+    for metric in channels(cfg):
         all_rows = load_view({**cfg, "quality_metric": metric}).split("test")
         if not len(all_rows):
             reports[metric] = {"status": "unavailable", "reason": "empty test split"}
@@ -55,7 +56,7 @@ def evaluate_data(cfg):
         for label, points in [(m, np.array([p])) for m, p in singles.items()] + [("random", curve([random], bench)), ("oracle", oracle_curve)]:
             curve_rows.extend({"metric": metric, "strategy": label, "cost": float(c), "quality": float(q)} for c, q in points)
     report = {"version": cfg["version"], "release": str(frozen_dir(cfg)), "channels": reports,
-              "note": "GT and ArmoRM are separate outcomes; oracle and hindsight best single are evaluation bounds, never train labels."}
+              "note": "Each quality channel is a separate outcome; oracle and hindsight best single are evaluation bounds, never train labels."}
     write_json(output / "evaluation.json", report)
     with (output / "curves.csv").open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["metric", "strategy", "cost", "quality"])
@@ -65,8 +66,9 @@ def evaluate_data(cfg):
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-        for ax, metric in zip(axes, ("ground_truth", "armorm")):
+        metrics = channels(cfg)
+        fig, axes = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), 4), squeeze=False)
+        for ax, metric in zip(axes[0], metrics):
             for label in sorted({r["strategy"] for r in curve_rows if r["metric"] == metric}):
                 pts = sorted((r["cost"], r["quality"]) for r in curve_rows if r["metric"] == metric and r["strategy"] == label)
                 ax.plot(*zip(*pts), marker=".", label=label)

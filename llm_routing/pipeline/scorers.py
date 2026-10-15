@@ -42,15 +42,15 @@ def get_scorer(name: str, **kwargs):
 
 class BARTScorer:
     def __init__(self, model_name: str = "facebook/bart-large-cnn", device: str | None = None, max_length: int = 1024,
-                 batch_size: int = 16):
+                 batch_size: int = 16, revision: str | None = None):
         import torch
         from transformers import BartForConditionalGeneration, BartTokenizer
 
         if device is None:
             device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
         self.device, self.max_length, self.batch_size = device, max_length, batch_size
-        self.tokenizer = BartTokenizer.from_pretrained(model_name)
-        self.model = BartForConditionalGeneration.from_pretrained(model_name).to(device).eval()
+        self.tokenizer = BartTokenizer.from_pretrained(model_name, revision=revision)
+        self.model = BartForConditionalGeneration.from_pretrained(model_name, revision=revision).to(device).eval()
 
     def __call__(self, responses: list[str], references: list[str]) -> np.ndarray:
         import torch

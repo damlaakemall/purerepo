@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from ...data.benchmark import Benchmark, safe_name
-from . import PROTOCOL
+from . import CHANNELS, PROTOCOL, channels, is_scored
 from .collect import generation_config, job_spec, response_hash
 from .dataset import load_dataset, model_pool
 from .io import digest, environment, key, locked, read_jsonl, seal, successful, verify, write_json
@@ -46,7 +46,7 @@ def package(cfg, model, member="local", shard_index=0, num_shards=1):
             raise ValueError("no responses to package")
         with tempfile.TemporaryDirectory(dir=target.parent) as tmp:
             tmp = Path(tmp)
-            for name in ("run.json", "responses.jsonl", "ground_truth.jsonl", "armorm.jsonl"):
+            for name in ("run.json", "responses.jsonl", *(f"{c}.jsonl" for c in CHANNELS)):
                 if (source / name).exists():
                     shutil.copyfile(source / name, tmp / name)
             seal(tmp, {"protocol": PROTOCOL, "dataset_id": spec["dataset_id"], "run_id": digest(spec)})
@@ -76,7 +76,7 @@ def _cost(model, metadata, definition):
 def _ingest(cfg, rows, dataset, bundles):
     models = model_pool(cfg)
     by_id = {r["id"]: r for r in rows}
-    responses, scores, evaluator_ids = {}, {"ground_truth": {}, "armorm": {}}, {}
+    responses, scores, evaluator_ids = {}, {c: {} for c in channels(cfg)}, {}
     for bundle in bundles:
         man = verify(bundle, ("run.json", "responses.jsonl"))
         run = json.loads((bundle / "run.json").read_text())
@@ -134,16 +134,16 @@ def _ingest(cfg, rows, dataset, bundles):
     return responses, scores
 
 
-def derive_wide(long, queries, names):
+def derive_wide(long, queries, names, quality=("ground_truth", "armorm")):
     long = long.copy()
-    for column in ("ground_truth", "armorm", "cost"):
+    for column in (*quality, "cost"):
         long[column] = pd.to_numeric(long[column], errors="raise").astype(float)
     wide = pd.DataFrame([{k: r[k] for k in ("id", "query", "source", "split")} for r in queries]).set_index("id")
     for m in names:
         block = long[long.model == m]
         g = block.groupby("query_id")
         wide[m + "__n_samples"] = g.size().reindex(wide.index, fill_value=0)
-        for metric in ("ground_truth", "armorm", "cost"):
+        for metric in (*quality, "cost"):
             for stat in ("mean", "max"):
                 wide[m + "__" + metric + "_" + stat] = getattr(g[metric], stat)().reindex(wide.index)
             first = block[block.sample_id == 0].set_index("query_id")[metric]
@@ -177,7 +177,7 @@ def assemble(cfg):
                     missing.append((k, "generation"))
                     continue
                 for channel in required:
-                    if channel == "ground_truth" and not q.get("answer_type"):
+                    if not is_scored(channel, q):
                         continue
                     if not scores[channel].get(k, {}).get("success"):
                         missing.append((k, channel))
@@ -221,7 +221,7 @@ def assemble(cfg):
                 per_sample[name][i, j, sid] = r[column]
         if sid == 0 and r["cost"] is not None:
             costs[i, j] = r["cost"]  # realized sample 0, never mean cost of a different sample
-    wide = derive_wide(long, rows, names)
+    wide = derive_wide(long, rows, names, list(scores))
     target.parent.mkdir(parents=True, exist_ok=True)
     with locked(target.parent / ".assemble.lock"):
         with tempfile.TemporaryDirectory(dir=target.parent) as tmp:
@@ -245,7 +245,7 @@ def assemble(cfg):
                               extras=extras)
                 b.save(str(tmp / "views" / channel), with_responses=False)
             seal(tmp, {"protocol": PROTOCOL, "version": cfg["version"], "dataset_id": dataset["dataset_id"],
-                       "models": names, "config_hash": digest(release_spec(cfg)), "n_rows": len(long), "missing_items": len(missing),
+                       "models": names, "channels": list(scores), "config_hash": digest(release_spec(cfg)), "n_rows": len(long), "missing_items": len(missing),
                        "content_hash": _long_content_hash(long), "environment": environment()})
             validate_release(tmp)
             tmp.rename(target)
@@ -265,7 +265,8 @@ def validate_release(path):
         raise ValueError("duplicate long-table sample keys")
     if len(long) != man["n_rows"] or _long_content_hash(long) != man["content_hash"]:
         raise ValueError("long-table content hash/row count mismatch")
-    for column in ("ground_truth", "armorm", "cost"):
+    quality = man.get("channels", ["ground_truth", "armorm"])  # releases before bartscore had these two
+    for column in (*quality, "cost"):
         long[column] = pd.to_numeric(long[column], errors="raise").astype(float)
     wide = pd.read_parquet(path / "wide.parquet")
     queries = read_jsonl(path / "dataset" / "queries.jsonl")
@@ -280,13 +281,13 @@ def validate_release(path):
         if not q or r["prompt"] != q["query"] or r["split"] != q["split"] or r["source"] != q["source"]:
             raise ValueError("long-table prompt/source/split mismatch")
     try:
-        pd.testing.assert_frame_equal(wide, derive_wide(long, queries, man["models"]), check_dtype=False)
+        pd.testing.assert_frame_equal(wide, derive_wide(long, queries, man["models"], quality), check_dtype=False)
     except AssertionError as e:
         raise ValueError("wide table does not match long-table aggregates") from e
     cfg = json.loads((path / "config.json").read_text())
     if digest(release_spec(cfg)) != man["config_hash"]:
         raise ValueError("resolved configuration hash mismatch")
-    for channel in ("ground_truth", "armorm"):
+    for channel in quality:
         b = Benchmark.load(str(path / "views" / channel))
         if (b.models != man["models"] or b.query_ids != [q["id"] for q in queries]
                 or b.queries != [q["query"] for q in queries] or b.references != [q["reference"] for q in queries]
@@ -300,7 +301,7 @@ def validate_release(path):
                 raise ValueError("long/view quality mismatch")
             if s == 0 and not np.isclose(b.costs[i, j], r["cost"], equal_nan=True):
                 raise ValueError("long/view cost mismatch")
-            expected = {**SAMPLE_EXTRAS, **{c: c for c in ("ground_truth", "armorm") if c != channel}}
+            expected = {**SAMPLE_EXTRAS, **{c: c for c in quality if c != channel}}
             for name, column in expected.items():
                 value = r.get(column)
                 if not np.isclose(b.extras[name][i, j, s], np.nan if value is None else value, equal_nan=True):
@@ -314,8 +315,9 @@ def load_view(cfg, with_responses=False):
     if man["config_hash"] != digest(release_spec(cfg)):
         raise ValueError("release configuration mismatch; only quality_metric may change when reading")
     metric = cfg.get("quality_metric", "ground_truth")
-    if metric not in ("ground_truth", "armorm"):
-        raise ValueError("quality_metric must be ground_truth or armorm")
+    available = man.get("channels", ["ground_truth", "armorm"])
+    if metric not in available:
+        raise ValueError(f"quality_metric must be one of this release's channels {available}")
     bench = Benchmark.load(str(target / "views" / metric))
     if with_responses:
         # Text lives once in the canonical long view, rather than duplicated in both metric views.

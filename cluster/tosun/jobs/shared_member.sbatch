@@ -14,7 +14,7 @@ ARGS=("$CFG" --model "$MODEL" --member "$MEMBER" --num-shards "$NUM_SHARDS" --sh
 echo "[$(date)] $STAGE $MODEL shard ${SLURM_ARRAY_TASK_ID:-0}/$NUM_SHARDS on $(hostname)"
 case "$STAGE" in
   generate) llmr_require_gpu; llmr generate "${ARGS[@]}" --max-retries 2 --batch-size "${LLMR_BATCH_SIZE:-256}" ;;
-  armorm) llmr_require_gpu; llmr score "${ARGS[@]}" --scorer armorm ;;
+  armorm|bartscore) llmr_require_gpu; llmr score "${ARGS[@]}" --scorer "$STAGE" ;;
   ground_truth) llmr score "${ARGS[@]}" --scorer ground_truth ;;   # CPU; MBPP runs model code in a subprocess
   package) llmr package-contribution "${ARGS[@]}" ;;
   *) echo "Unknown stage: $STAGE" >&2; exit 1 ;;

@@ -59,6 +59,7 @@ CFG=configs/benchmarks/shared_v1.yaml; MODEL=smollm3-3b; MEMBER=ibrahim
 llmr generate "$CFG" --model "$MODEL" --member "$MEMBER" --num-shards 4 --shard-index 0 --max-retries 2 --batch-size 256
 llmr score "$CFG" --model "$MODEL" --member "$MEMBER" --num-shards 4 --shard-index 0 --scorer ground_truth
 llmr score "$CFG" --model "$MODEL" --member "$MEMBER" --num-shards 4 --shard-index 0 --scorer armorm
+llmr score "$CFG" --model "$MODEL" --member "$MEMBER" --num-shards 4 --shard-index 0 --scorer bartscore
 llmr package-contribution "$CFG" --model "$MODEL" --member "$MEMBER" --num-shards 4 --shard-index 0
 ```
 
@@ -116,7 +117,7 @@ RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT. Her birinin
 release'ten ne aldığı router sözleşmesindeki tabloda.
 
 Mevcut bir router'ı ortak veri üzerinde ileride çalıştırırken experiment config'inde
-benchmark olarak shared YAML'ı seçin. `quality_metric: ground_truth` ve `armorm` için
+benchmark olarak shared YAML'ı seçin. `quality_metric: ground_truth`, `armorm` ve `bartscore` için
 ayrı deneyler yapın; label metriğini paper gerekçesi olmadan değiştirmeyin. Eşik ve
 checkpoint val'den, son rapor aynı test sorularından seçilir. Paper-native metrikleri
 ortak quality/cost raporunun yanına ekleyin. En az üç seed ile raporlayın.

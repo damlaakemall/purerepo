@@ -31,11 +31,26 @@ veriyle baştan yazılacak.
 
 `build-queries` bütün soruları generation'dan **önce** `dataset/` içine atomik olarak
 kaydeder. ID = kaynak adı + kaynak örnek kimliği/soru içeriğinin SHA256 özeti.
-Satır sırası değişmesi ID'yi değiştirmez. Soru değişirse ID de değişir. Kaynaklar
-arasında normalize edilmiş aynı soru aynı split'e girer: seed + normalize soru
-hash'i, YAML'daki oran aralıklarına eşlenir. Oranlar beklenen oranlardır; özellikle
-küçük veri setlerinde tam oran veya her split'te örnek garantisi yoktur. Yakın anlamlı
-paraphrase tespiti yapılmaz; yayın öncesi ayrıca contamination incelemesi gerekir.
+Satır sırası değişmesi ID'yi değiştirmez. Soru değişirse ID de değişir.
+
+Split referans repodaki gibi iki adımda çizilir ([`splits.py`](../llm_routing/pipeline/shared/splits.py)):
+
+1. **Neredeyse-aynı gruplar.** Bütün sorular `all-MiniLM-L6-v2` (sabit revision) ile
+   vektöre çevrilir; kosinüs benzerliği ≥ 0,99 olan sorular bağlanır ve bağlı sorular tek
+   grup olur. Bir grup her zaman tek bir split'e düşer, böylece bir sorunun ikizi
+   train'de, kendisi test'te olamaz. `method: exact` yalnız birebir aynı metni bağlar,
+   model gerektirmez (smoke testi bunu kullanır).
+2. **Kaynak bazında katmanlı bölme.** Her kaynak ayrı bölünür: grupları
+   `seed ^ crc32(kaynak)` ile karıştırılır ve train `floor(n·0,6)`, val `floor(n·0,7) − train`
+   soruya ulaşana kadar dağıtılır; kalanı test. Her kaynak bu yüzden 60/10/30 alır (grup
+   boyutları kadar sapma olabilir). `ood_datasets` içindeki kaynaklar tamamen test'e gider.
+
+Gerçek `shared_v1` verisinde (7652 soru) 156 grup, 753 soru çıktı; 719'u BBH'den.
+BBH'nin şablonlu görevleri (boolean ifadeler, parantez tamamlama, kelime sıralama)
+embedding'e göre neredeyse aynı göründüğü için büyük gruplar oluşturur (en büyüğü 67
+soru). Bu yüzden böyle bir görevin örnekleri toplu olarak tek split'e gider ve BBH
+oranları biraz kayar (62,0 / 9,4 / 28,6). Referans repo da aynı davranışa sahiptir.
+Diğer kaynaklar tam 60/10/30'dur.
 
 `dataset_id` tüm sıralı soru kayıtlarının hash'idir. `queries.jsonl` kaynak, referans,
 split ve GT evaluator adını taşır. `splits.json`, kaynak revision/fingerprint'leri,
@@ -67,7 +82,7 @@ Her iş `contributions/<member>/<model>/shard-X-of-Y/` altında yazar:
   seed, shard, üye, Git commit/dirty bilgisi ve kurulu paket sürümleri.
 - `responses.jsonl`: her `(query_id, model, sample_id)` için bir satır; raw metin,
   seed, metadata, response hash, başarı/hata ve retry denemesi.
-- `ground_truth.jsonl`, `armorm.jsonl`: birbirinden bağımsız skor günlükleri.
+- `ground_truth.jsonl`, `armorm.jsonl`, `bartscore.jsonl`: birbirinden bağımsız skor günlükleri.
 
 Model bazında `generation.k` global `k` değerini değiştirebilir. Üye başına değişik
 soru seti üretilmez; shard'lar query ID hash'iyle ayrılır.
@@ -97,7 +112,7 @@ satır hata verir. Aynı dosya için exclusive lock vardır. SIGKILL sonrası ka
 ancak önceki işin durduğunu kontrol ettikten sonra elle kaldırın. YAML/model ayarı
 veya kaynak kod hash'i değiştiğinde aynı işe resume edilmez.
 
-## 3. İki ayrı scoring kanalı
+## 3. Ayrı scoring kanalları (ground truth, ArmoRM, BARTScore)
 
 **Ground truth**, referans repodaki (SU Lab LLM-Routing-Project) blind audit'lerle
 sağlamlaştırılmış evaluator'ların kopyasıdır:
@@ -130,9 +145,20 @@ response üretmez veya router training yapmaz. `trust_remote_code=True` sabit
 revision ile kullanılır. Bu kod GPU'da henüz gerçek ArmoRM ile çalıştırılmadı; ilk
 küçük Tosun koşusunda bağımlılık uyumluluğu kontrol edilmelidir.
 
+**BARTScore**, referans repo nasıl hesaplıyorsa öyle hesaplanır (`bart_scoring_pipeline.py`):
+`facebook/bart-large` (sabit revision) ile prompt verildiğinde cevabın token log-olasılıklarının
+**toplamı**, yani `sum_t log p(y_t | y_<t, prompt)`. Referans cevap kullanılmaz; bütün sorular
+ve bütün cevaplar skorlanır. Negatif ve sürekli; 0'a yaklaştıkça iyi. Prompt ve cevap
+512 BART token'ına kesilir. Bu sınıfın sonucu, referans fonksiyonuyla gerçek `bart-large`
+üzerinde birebir aynı çıktı. Dikkat: değer bir toplam olduğu için uzun cevaplar daha
+düşük skor alır; `extras/completion_tokens` ile birlikte okuyun. Hybrid LLM makalesindeki
+BARTScore cevabı bir referans cevaba göre puanlar; buradaki referans repo'nun tanımıdır.
+Kanal, benchmark'ın `scoring:` altında `bartscore` olduğunda toplanır ve
+`views/bartscore/` olarak yayımlanır.
+
 Her scoring kaydı raw yanıtın hash'ine ve evaluator config hash'ine bağlıdır.
 `text_policy: strip_think` yalnız scoring girdisinden `<think>` bloğunu çıkarır;
-`raw` seçeneği aynen puanlar. Raw yanıt hiçbir zaman silinmez. İki scorer ayrı
+`raw` seçeneği aynen puanlar. Raw yanıt hiçbir zaman silinmez. Her scorer ayrı
 çalıştırılır ve ayrı resume edilir. Başarısız skorlar saklanır ve yeniden denenir.
 
 ## 4. Güvenli birleştirme ve sürümleme
@@ -158,6 +184,7 @@ istenen eksik koleksiyonlara izin verir; eksiklik sayısı manifestte görünür
 | `wide.parquet` | soru başına modelin sample sayısı ve her metric için first/mean/max, toplam sample cost |
 | `views/ground_truth/` | mevcut router'ların okuyabildiği GT `Benchmark` |
 | `views/armorm/` | aynı sorular/modeller/split/cost ile ayrı ArmoRM `Benchmark` |
+| `views/bartscore/` | aynı sorular, BARTScore (bütün sorular) |
 | `views/*/extras/` | sample başına `(N, M, k)` diziler: `sample_cost`, `completion_tokens`, `seconds` ve diğer kalite kanalı (GT view'da `armorm`, ArmoRM view'da `ground_truth`) |
 | `dataset/` | orijinal sorular, referanslar, split ve dataset manifesti |
 | `inputs/` | katkı paketlerinin tamamı; retry/error/raw usage/scoring detayları kaybolmaz |
@@ -184,11 +211,11 @@ belirttiği modelde yaptığını kriptografik olarak ispatlamaz.
 
 ## 5. Evaluation ve ilerideki router'lar
 
-`evaluate-data` eğitim yapmadan iki ayrı rapor ve kalite-maliyet grafiği üretir:
+`evaluate-data` eğitim yapmadan her kalite kanalı için ayrı rapor ve kalite-maliyet grafiği üretir:
 her single model, cheapest single, seeded random, quality oracle ve oracle budget
 curve. Her metrikte aynı sabit complete cohort kullanılır, kullanılan query ID'leri
 ve coverage raporlanır. GT ve ArmoRM cohort'ları gold bulunabilirliği nedeniyle
-farklı olabilir; sonuçlar iki ayrı paneldir. Source bazında sonuçlar da yazılır.
+farklı olabilir; her kanal ayrı paneldir. Source bazında sonuçlar da yazılır.
 Oracle ve hindsight best single birer evaluation referansıdır, deploy edilebilir
 model seçimi veya eğitim etiketi değildir. Threshold/hiperparametre seçimi val'de
 yapılmalı; test curve'ü işletim noktası seçmek için kullanılmamalıdır.

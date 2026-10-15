@@ -18,7 +18,7 @@ henüz implemente edilmedi; bu tablo implementasyon iddiası değildir):
 
 | # | makale | yayın | release'te hazır olan | implementasyonda dikkat |
 |---|---|---|---|---|
-| 1 | Hybrid LLM (2404.14618) | ICLR 2024 | `scores` (N, M, k=10) — r_prob/r_trans k sample ister | önceki implementasyon silindi, yeni veriyle baştan yazılacak; küçük/büyük çifti havuzdan seçilmeli, NaN padding paydaya girmemeli |
+| 1 | Hybrid LLM (2404.14618) | ICLR 2024 | `views/bartscore` (referans repo'nun BARTScore'u) veya `views/ground_truth`; `scores` (N, M, k=10) — r_prob/r_trans k sample ister | önceki implementasyon silindi, yeni veriyle baştan yazılacak; küçük/büyük çifti havuzdan seçilmeli, NaN padding paydaya girmemeli |
 | 3 | RouteLLM (2406.18665) | ICLR 2025 | sample-0 skorlarından her model çifti için battle | Elo/tier **yalnız train** battle'larından (referans repoda val/test sızıyor); GT judge |
 | 4 | GraphRouter (2410.03834) | ICLR 2025 | `sources` = task düğümü; maliyet (model, kaynak) başına train ortalaması | test kenarları görünmez; test sorguları çıkarımda düğüm olarak eklenir |
 | 5 | MixLLM | NAACL 2025 | `extras/seconds` (gecikme), `completion_tokens`, `sample_cost` | online/sürekli öğrenme için sabit bir sorgu akışı sırası seçilmeli |

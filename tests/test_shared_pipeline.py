@@ -355,3 +355,30 @@ def test_batched_backend_retries_only_failed_samples(cfg):
     failed = sum(not r["success"] for r in rows)
     assert failed and calls[0] == 4 and calls[1] == failed  # the retry re-sends the failed requests only
     assert sum(r["success"] for r in rows) == 5 * 2
+
+
+def test_bartscore_channel_scores_every_response_and_gets_its_own_view(tmp_path):
+    c = load_benchmark_config(str(Path(REPO_ROOT) / "configs/benchmarks/shared_smoke.yaml"))
+    c["path"] = str(tmp_path / "collection")
+    c["sources"][0].update(local_path=str(Path(REPO_ROOT) / "tests/fixtures/shared_queries.jsonl"), n=5)
+    c["models"] = c["models"][:1]
+    c["scoring"]["bartscore"] = {"model_name": "synthetic-bart-test-double", "text_policy": "strip_think"}
+    c["required_scores"] = ["ground_truth", "armorm", "bartscore"]
+    build_queries(c)
+    generate(c, "tiny", backend=fake, retry_delay=0)
+    score(c, "tiny")
+    score(c, "tiny", scorer="armorm", evaluator=lambda q, r: (0.5, {"synthetic": True}))
+    seen = []
+    def bart(prompt, response):  # stands in for BARTScore: log p(response | prompt), summed
+        seen.append((prompt, response))
+        return -1.5 * len(response), {"target_tokens": len(response)}
+    score(c, "tiny", scorer="bartscore", evaluator=bart)
+    package(c, "tiny")
+    gt = assemble(c)
+    view = load_benchmark({**c, "quality_metric": "bartscore"})
+    assert len(seen) == 5 * 3 and all(p.startswith("Compute") for p, _ in seen)  # every response, scored given its prompt
+    assert np.isfinite(view.scores[:, 0, :]).all() and (view.scores[:, 0, :] < 0).all()
+    assert set(gt.extras) >= {"armorm", "bartscore"} and set(view.extras) >= {"ground_truth", "armorm"}
+    assert validate_release(frozen_dir(c))["channels"] == ["ground_truth", "armorm", "bartscore"]
+    from llm_routing.pipeline.shared.evaluate import evaluate_data
+    assert set(evaluate_data(c)["channels"]) == {"ground_truth", "armorm", "bartscore"}

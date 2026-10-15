@@ -31,7 +31,7 @@ def main(argv=None):
         s.add_argument("--shard-index", type=int)
         s.add_argument("--num-shards", type=int)
         if name == "score":
-            s.add_argument("--scorer", choices=["ground_truth", "armorm"])
+            s.add_argument("--scorer", choices=["ground_truth", "armorm", "bartscore"])
         if name == "generate":
             s.add_argument("--max-retries", type=int)
             s.add_argument("--retry-delay", type=float)
