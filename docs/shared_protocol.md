@@ -159,7 +159,12 @@ Kanal, benchmark'ın `scoring:` altında `bartscore` olduğunda toplanır ve
 `views/bartscore/` olarak yayımlanır.
 
 Her scoring kaydı raw yanıtın hash'ine ve evaluator config hash'ine bağlıdır.
-`text_policy: strip_think` yalnız scoring girdisinden `<think>` bloğunu çıkarır;
+`text_policy: strip_think` yalnız scoring girdisinden `<think>` bloğunu çıkarır
+(referanstaki `strip_reasoning`: `think|thinking|reasoning` etiketleri; kapanmamış blok =
+yarıda kesilmiş düşünce, cevap yok). DeepSeek-R1-Distill'in chat template'i prompt'u
+`<think>\n` ile bitirir; generation bu öneki yanıtın başına geri koyar
+(`metadata.response_prefix`), yoksa iz silinemez. Geriye bir şey kalmazsa GT 0 alır
+(`mode: no_answer`), ArmoRM ve BARTScore ise referanstaki gibi raw metni puanlar.
 `raw` seçeneği aynen puanlar. Raw yanıt hiçbir zaman silinmez. Her scorer ayrı
 çalıştırılır ve ayrı resume edilir. Başarısız skorlar saklanır ve yeniden denenir.
 

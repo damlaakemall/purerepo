@@ -382,3 +382,17 @@ def test_bartscore_channel_scores_every_response_and_gets_its_own_view(tmp_path)
     assert validate_release(frozen_dir(c))["channels"] == ["ground_truth", "armorm", "bartscore"]
     from llm_routing.pipeline.shared.evaluate import evaluate_data
     assert set(evaluate_data(c)["channels"]) == {"ground_truth", "armorm", "bartscore"}
+
+
+def test_reasoning_only_response_scores_zero_gt_and_raw_text_for_reward_models(cfg):
+    # A reasoning model cut off mid-thought answered nothing: GT 0 ("no_answer"), as in the reference.
+    # ArmoRM/BARTScore rate the raw text then, never an empty string (BART's best possible score).
+    def truncated(query, seed):
+        return f"<think>\nmaybe {int(query.split()[1]) + 1}", {"engine": "test-double", "formatted_prompt": query}
+    generate(cfg, "tiny", backend=truncated, retry_delay=0)
+    path = score(cfg, "tiny")
+    rows = read_jsonl(path / "ground_truth.jsonl")
+    assert rows and all(r["score"] == 0.0 and r["details"]["mode"] == "no_answer" for r in rows)
+    seen = []
+    score(cfg, "tiny", scorer="armorm", evaluator=lambda q, r: (seen.append(r), (0.5, {}))[1])
+    assert seen and all(r.startswith("<think>") for r in seen)

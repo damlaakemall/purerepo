@@ -6,6 +6,7 @@ keeps that contract while using the GPU properly.
 """
 from __future__ import annotations
 
+import re
 import time
 
 from .io import digest
@@ -62,6 +63,11 @@ class Generator:
             raise ValueError("system_prompt requires a chat template")
         formatted = (self.tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True,
                                                   **m.get("chat_template_kwargs", {})) if template else query)
+        # Some templates open the reasoning block themselves (DeepSeek-R1-Distill ends the prompt with
+        # "<think>\n"), so the model's text holds only "...</think> answer". The prefix is put back in
+        # front of the response so it is the whole assistant turn and strip_think can find the trace.
+        opened = re.search(r"<(think|thinking|reasoning)>\s*$", formatted) if template else None
+        meta["response_prefix"] = opened.group(0) if opened else ""
         meta.update(formatted_prompt=formatted, chat_template=template, chat_template_hash=digest(template),
                     chat_template_kwargs=m.get("chat_template_kwargs", {}), tokenizer_name=self.tok.name_or_path,
                     tokenizer_revision=self.tok.init_kwargs.get("_commit_hash"), seed_applied=True)
@@ -95,7 +101,7 @@ class Generator:
         results = list(prepared)
         for (i, (_, meta)), out, p in zip(live, outputs, params):
             o = out.outputs[0]
-            results[i] = (o.text, {**meta, "sampling_params": str(p), "completion_tokens": len(o.token_ids),
+            results[i] = (meta["response_prefix"] + o.text, {**meta, "sampling_params": str(p), "completion_tokens": len(o.token_ids),
                                    "finish_reason": o.finish_reason, "batch_size": len(live),
                                    "batch_seconds_per_sample": per_sample})
         return results
@@ -118,7 +124,7 @@ class Generator:
             meta.update(completion_tokens=len(seq), finish_reason="length" if len(seq) == g["max_new_tokens"] else "stop",
                         resolved_revision=getattr(self.llm.config, "_commit_hash", None), batch_size=1,
                         batch_seconds_per_sample=time.perf_counter() - start)
-            return self.tok.decode(seq, skip_special_tokens=True), meta
+            return meta["response_prefix"] + self.tok.decode(seq, skip_special_tokens=True), meta
         except Exception as e:
             return e
 

@@ -124,18 +124,24 @@ def generate(cfg, model, member="local", shard_index=0, num_shards=1, max_retrie
     return path
 
 
+# The reference's strip_reasoning (data_generator/scoring/reasoning.py): a closed trace is removed;
+# an unclosed one means the response was cut off mid-thought, so nothing after it is an answer.
+REASONING_TAGS = ("think", "thinking", "reasoning")
+_CLOSED = re.compile(r"<\s*(" + "|".join(REASONING_TAGS) + r")\s*>.*?<\s*/\s*\1\s*>", re.S | re.I)
+_UNCLOSED = re.compile(r"<\s*(" + "|".join(REASONING_TAGS) + r")\s*>.*\Z", re.S | re.I)
+
+
 def answer_text(text, policy):
     if policy == "raw":
         return text
     if policy != "strip_think":
         raise ValueError("text_policy must be raw or strip_think")
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S)
-    return re.sub(r"<think>.*$", "", text, flags=re.S).strip()
+    return _UNCLOSED.sub(" ", _CLOSED.sub(" ", text or "")).strip()
 
 
 class ArmoRM:
     """Offline evaluator only. No labels, routing decisions, or generation calls."""
-    def __init__(self, model_id="RLHFlow/ArmoRM-Llama3-8B-v0.1", revision=None, device_map="auto"):
+    def __init__(self, model_id="RLHFlow/ArmoRM-Llama3-8B-v0.1", revision=None, device_map=None):
         import torch
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
         if not revision or revision.startswith("PIN_"):
@@ -146,6 +152,8 @@ class ArmoRM:
         self.docstring_compat = not hasattr(modeling_llama, "LLAMA_INPUTS_DOCSTRING")
         if self.docstring_compat:
             modeling_llama.LLAMA_INPUTS_DOCSTRING = ""
+        if device_map is None:
+            device_map = {"": 0} if torch.cuda.is_available() else {"": "cpu"}
         self.tok = AutoTokenizer.from_pretrained(model_id, revision=revision)
         self.model = AutoModelForSequenceClassification.from_pretrained(
             model_id, revision=revision, trust_remote_code=True, torch_dtype=torch.bfloat16, device_map=device_map).eval()
@@ -239,10 +247,16 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
                 evaluator = BARTScore(**options)
             try:
                 text = answer_text(r["response"], policy)
-                if scorer == "armorm":
-                    value, details = evaluator(query["query"], text)
-                elif scorer == "bartscore":
-                    value, details = evaluator(query["query"], text)
+                if scorer in ("armorm", "bartscore"):
+                    # As the reference: if nothing is left after the trace (a truncated reasoning
+                    # model), rate the raw text. An empty response would otherwise get BART's best score.
+                    value, details = evaluator(query["query"], text or r["response"])
+                elif not text:
+                    # Empty, or reasoning and nothing after: the model answered nothing, which is wrong
+                    # (the reference's evaluation_mode "no_answer"), not an unscorable row.
+                    value = 0.0
+                    details = {"answer_type": query["answer_type"], "mode": "no_answer",
+                               "strict_correct": False, "predicted": ""}
                 else:
                     from ..ground_truth import score_query
                     ev = score_query(query, text, mbpp_timeout=int(options.get("mbpp_timeout", 5)))

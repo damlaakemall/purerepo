@@ -69,3 +69,23 @@ def test_unpinned_revision_rejected():
 def test_unknown_engine_rejected(engine):
     with pytest.raises(ValueError, match="unsupported engine"):
         Generator({}, {"engine": engine})
+
+
+def test_template_opened_think_block_is_put_back(monkeypatch):
+    # DeepSeek-R1-Distill's template ends the prompt with "<think>\n"; the model's own text starts mid-trace.
+    calls, seen = [], []
+    _fake_vllm(monkeypatch, calls, seen)
+    monkeypatch.setattr(Tokenizer, "apply_chat_template", lambda self, messages, **kw: "<user>q<assistant><think>\n")
+    generator = Generator({"model_id": "fake/model", "revision": "fixed-sha"},
+                          {"engine": "vllm", "temperature": .7, "top_p": .95, "max_new_tokens": 16})
+    text, metadata = generator("q", 3)
+    assert text == "<think>\nanswer-3" and metadata["response_prefix"] == "<think>\n"
+
+
+def test_strip_think_matches_reference():
+    from llm_routing.pipeline.shared.collect import answer_text
+    assert answer_text("<think>\nmaybe (D)</think>\nAnswer: (B)", "strip_think") == "Answer: (B)"
+    assert answer_text("<Thinking>x</Thinking> ok", "strip_think") == "ok"
+    assert answer_text("<think>\ncut off mid-thought, Answer: (D)", "strip_think") == ""  # truncated: no answer
+    assert answer_text("<think>\n\n</think>\nplain", "strip_think") == "plain"           # SmolLM3 no-think
+    assert answer_text("<think>x</think>y", "raw") == "<think>x</think>y"

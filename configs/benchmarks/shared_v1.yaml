@@ -95,7 +95,9 @@ scoring:
   armorm:
     model_id: RLHFlow/ArmoRM-Llama3-8B-v0.1
     revision: eb2676d20da2f2d41082289d23c59b9f7427f955
-    device_map: auto
+    # As the reference: the whole 8B model on one GPU. "auto" silently offloads layers to CPU on a
+    # small card (~20 s per sample, a job that never finishes); this fails with OOM instead.
+    device_map: {"": 0}
     text_policy: strip_think
   # BARTScore as in SU Lab LLM-Routing-Project: sum of log p(response | prompt) under BART-large, on
   # every response. A quality channel for Hybrid LLM; no reference answer involved.
