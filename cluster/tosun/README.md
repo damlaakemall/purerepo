@@ -27,9 +27,9 @@ wandb login                          # experiment tracking (optional)
 GPU jobs check `torch.cuda.is_available()` first (`llmr_require_gpu`): a torch built for a newer CUDA than the
 driver would otherwise run on CPU, ~750x slower, and die on the wall clock hours later.
 
-## 2. Build our benchmark (once per benchmark version)
+## 2. Build a benchmark with the older single-user pipeline (`ours_v1` / `ours_dev`)
 
-> Check [DECISIONS.md](../../DECISIONS.md) first. The `ours_v1` model pool is still a draft (open item #1).
+> The main benchmark is now `shared_v1`, built by team members model by model: skip to [Independent shared-v1 member jobs](#independent-shared-v1-member-jobs). This section is kept for the earlier `ours_v1` draft and the quick `ours_dev` pipeline test. Check the open items in [DECISIONS.md](../../DECISIONS.md) first.
 
 ```bash
 bash cluster/tosun/submit_pipeline.sh configs/benchmarks/ours_v1.yaml --push
@@ -65,6 +65,6 @@ srun --partition=cuda --qos=cuda --gres=gpu:1 --mem=32G --time=01:00:00 --pty ba
 
 For the new protocol use `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` after
 freezing/sharing the dataset. It requests the model's `gpus` (2 for the 24B, 27B and 32B models), then runs
-GT (CPU) and ArmoRM (1 GPU) scoring in parallel and packages the shard; it never submits router training.
+GT (CPU), ArmoRM (1 GPU) and BARTScore (1 GPU, if configured) scoring in parallel and packages the shard; it never submits router training.
 `LLMR_BATCH_SIZE` (default 256) is how many requests go to vLLM at once. The older `submit_pipeline.sh` continues
 to serve the original ours_v1/ours_dev configs. See [team workflow](../../docs/team_workflow.md).

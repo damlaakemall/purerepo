@@ -13,8 +13,10 @@ flowchart LR
   Q --> R[Üye + model + shard: raw responses]
   R --> G[Ground-truth evaluator]
   R --> A[Offline ArmoRM]
+  R --> S[BARTScore]
   G --> B[Doğrulanmış katkı paketleri]
   A --> B
+  S --> B
   B --> M[Sürümlü long / wide + manifest]
   M --> L[Makalenin kendi training labels adımı]
   L --> T[Makalenin kendi router eğitimi]
@@ -180,7 +182,7 @@ istenen eksik koleksiyonlara izin verir; eksiklik sayısı manifestte görünür
 
 | çıktı | içerik |
 |---|---|
-| `long.parquet` | her response sample, raw text, ayrı GT/ArmoRM, token metadata JSON, seed, ayrı input/output/total cost |
+| `long.parquet` | her response sample, raw text, ayrı GT/ArmoRM/BARTScore, token metadata JSON, seed, ayrı input/output/total cost |
 | `wide.parquet` | soru başına modelin sample sayısı ve her metric için first/mean/max, toplam sample cost |
 | `views/ground_truth/` | mevcut router'ların okuyabildiği GT `Benchmark` |
 | `views/armorm/` | aynı sorular/modeller/split/cost ile ayrı ArmoRM `Benchmark` |

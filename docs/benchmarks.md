@@ -24,9 +24,11 @@ Every router is trained and tested on a **frozen `Benchmark`** ([`data/benchmark
 | `mixinstruct` | 12 open LLMs (2023) | 1 | BARTScore | parameter count (proxy) | 16k | Hybrid LLM's original setting |
 | `routerbench` | 11 incl. GPT-4, Claude, Mixtral | 1 | 0/1 correctness | real USD | 36k | multi-model routers, real prices |
 | `ours_v1` | Qwen2.5 0.5–7B, Llama-3.1-8B (draft) | 10 | BARTScore / exact match / MC accuracy per source | ∝ params × tokens | 10k (draft) | earlier draft, kept for existing runs |
-| `shared_v1` | 12 open-weight, 3B-33B (SmolLM3, Llama 3.x, Phi-4, Mistral, OLMo 3, Qwen2.5, R1-Distill-Llama, Gemma 3) | 10 | ground truth (0/1, token F1) and ArmoRM, separate views | ∝ params × tokens | ~7.6k | **main comparison**: the team's version of SU Lab LLM-Routing-Project, built on Tosun ([protocol](shared_protocol.md)) |
+| `shared_v1` | 12 open-weight, 3B-33B (SmolLM3, Llama 3.x, Phi-4, Mistral, OLMo 3, Qwen2.5, R1-Distill-Llama, Gemma 3) | 10 | ground truth (0/1, token F1), ArmoRM and BARTScore, separate views | ∝ params × tokens | ~7.6k | **main comparison**: the team's version of SU Lab LLM-Routing-Project, built on Tosun ([protocol](shared_protocol.md)) |
 
-## Building our benchmark (`ours_v1`)
+## Building the earlier draft benchmark (`ours_v1`)
+
+`shared_v1` is built with the member workflow instead: see [team_workflow.md](team_workflow.md) and [shared_protocol.md](shared_protocol.md).
 
 1. `llmr build-queries` samples queries from each source, applies a fixed seed, and assigns splits. This runs once.
 2. `llmr generate --model M` runs vLLM on a GPU and writes k samples per query. It can resume, and runs as one SLURM array task per model.

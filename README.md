@@ -4,6 +4,10 @@ Implementations of LLM **routing** papers, written to understand *what* each rou
 
 > **Routing:** given a query and a pool of LLMs with different costs and abilities, decide which model answers it, so you get the best quality for the money.
 
+**Why this repo exists.** It is a learning project: the goal is for the team to learn how to run real workloads on Sabancı's Tosun cluster, and how routers and LLM scoring actually work in code, not only in theory. So router implementations are kept **small and readable**: the paper's method is followed faithfully, but its infrastructure (own data pipelines, ablation variants, distributed training) is left out, and every deliberate deviation is written down. Each paper may also get an explanatory notebook next to its code (planned, see [CONTRIBUTING.md](CONTRIBUTING.md#keep-it-simple)).
+
+**Working with an AI assistant?** [AGENTS.md](AGENTS.md) is the short orientation for AI coding agents (and a good map for new people too).
+
 | paper | family | how it decides | code | explainer |
 |---|---|---|---|---|
 | *quality regression* (RouterBench baseline) | multi-model | predict every model's quality, pick argmax(quality − λ·cost) | [`routers/baselines.py`](llm_routing/routers/baselines.py) | [docs](docs/comparison.md) |
@@ -18,7 +22,7 @@ Implementations of LLM **routing** papers, written to understand *what* each rou
 We are building the team's own version of LLM-Routing-Project. Existing routers and
 benchmark configurations remain available. The new `shared-v1` pipeline adds frozen
 query IDs/splits, independent member/model shards, sample-level resume/retry,
-separate ground-truth and offline ArmoRM scoring, validated contribution bundles,
+separate ground-truth, offline ArmoRM and BARTScore scoring, validated contribution bundles,
 and immutable long/wide releases with hashes and per-metric benchmark views.
 
 Start with the [team guide (Türkçe)](docs/team_workflow.md),
