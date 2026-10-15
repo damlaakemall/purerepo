@@ -17,7 +17,8 @@ A **learning project** at Sabancı University. The team re-implements LLM routin
 | `llm_routing/data/` | the shared `Benchmark` format (`benchmark.py`) and loaders for synthetic / MixInstruct / RouterBench |
 | `llm_routing/pipeline/shared/` | `shared_v1` data collection: frozen queries and splits → per-member generation → scoring → contribution bundles → assembled release |
 | `llm_routing/pipeline/ground_truth/` | audited ground-truth evaluators ported from the reference repo (numeric, MCQ, BBH, OlympiadBench, MBPP code execution, token F1) |
-| `llm_routing/pipeline/scorers.py` | BARTScore and simple scorers (the ArmoRM scorer is `ArmoRM` in `pipeline/shared/collect.py`) |
+| `llm_routing/pipeline/shared/collect.py` | `shared_v1` generation and the three scoring channels: `ArmoRM`, `BARTScore` (the reference repo's definition), ground truth via `pipeline/ground_truth`; `answer_text` strips reasoning traces |
+| `llm_routing/pipeline/scorers.py` | older single-user pipeline (`ours_v1`) scorers; its `bartscore` is the paper's reference-based variant, not the `shared_v1` channel |
 | `llm_routing/runner.py`, `cli.py` | the single train + evaluate procedure, and the `llmr` command |
 | `configs/` | `benchmarks/` (`shared_v1.yaml` is the main one), `model_pools/team.yaml` (12 models), `routers/`, `experiments/` |
 | `cluster/tosun/` | SLURM scripts for Tosun; start with its README |
@@ -37,7 +38,14 @@ llmr train configs/experiments/quality_regression__synthetic.yaml   # CPU router
 llmr routers                                                # registered routers
 ```
 
-CI (`.github/workflows/`) runs these three. Real generation and scoring only run on Tosun GPUs.
+CI (`.github/workflows/`) runs these three. Real generation and scoring only run on Tosun GPUs:
+
+```bash
+bash cluster/tosun/submit_member.sh configs/benchmarks/shared_pilot.yaml <model> <member> 1   # 30-query pilot first
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_pilot.yaml <model> <member>    # check it before packaging
+```
+
+Setup, GPUs and known Tosun problems: [cluster/tosun/README.md](cluster/tosun/README.md) and [docs/walkthrough/01_egitim_verisi.md](docs/walkthrough/01_egitim_verisi.md).
 
 ## Rules that must not be broken
 

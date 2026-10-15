@@ -13,11 +13,19 @@ Implementations of LLM **routing** papers, written to understand *what* each rou
 | *quality regression* (RouterBench baseline) | multi-model | predict every model's quality, pick argmax(quality − λ·cost) | [`routers/baselines.py`](llm_routing/routers/baselines.py) | [docs](docs/comparison.md) |
 | *next paper…* | | | | |
 
-**Open team decisions:** [DECISIONS.md](DECISIONS.md) (LLM pool for our benchmark, cost proxy, …).
+## Where to start
 
-**How we did it (Türkçe):** [docs/walkthrough/](docs/walkthrough/README.md) explains each finished project step in its final form: which tests and why, which models and why, how answers are scored, how a model is run on Tosun, and how results are read and checked, each with a real run. A new write-up is added as each step is finished.
+| I want to... | read / run |
+|---|---|
+| understand what we are doing and why (Türkçe) | [docs/walkthrough/](docs/walkthrough/README.md): each finished project step in one write-up, with a real run. Step 1: [producing the router training data](docs/walkthrough/01_egitim_verisi.md) |
+| learn routing itself | [routing fundamentals](docs/routing_fundamentals.md) → [how routers are compared](docs/comparison.md) → [benchmarks & fairness rules](docs/benchmarks.md) → [metrics](docs/evaluation.md) |
+| check the code on my laptop | [Quick start](#quick-start-laptop-cpu) below: `pytest -q`, `llmr smoke-pipeline` |
+| generate and score a model on Tosun | [cluster/tosun/README.md](cluster/tosun/README.md); run the 30-query pilot `configs/benchmarks/shared_pilot.yaml` first |
+| add a router (paper) | [CONTRIBUTING.md](CONTRIBUTING.md) and the [router contract](docs/router_contract.md) |
+| see what is decided / still open | [DECISIONS.md](DECISIONS.md) (open: cost proxy, mixed quality scales, shared accounts, GPUs for the large models, token limit for the reasoning model) |
+| work on it with an AI agent | [AGENTS.md](AGENTS.md): map, commands, rules that must not break |
 
-**Start here:** [routing fundamentals](docs/routing_fundamentals.md) → [how routers are compared](docs/comparison.md) → [benchmarks & fairness rules](docs/benchmarks.md) → [metrics](docs/evaluation.md) → [current leaderboard](results/leaderboard.md).
+**Learning path:** [routing fundamentals](docs/routing_fundamentals.md) → [how routers are compared](docs/comparison.md) → [benchmarks & fairness rules](docs/benchmarks.md) → [metrics](docs/evaluation.md) → [current leaderboard](results/leaderboard.md).
 
 ## Team collection protocol
 
