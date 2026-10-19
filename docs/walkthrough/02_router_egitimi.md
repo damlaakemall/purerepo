@@ -115,6 +115,8 @@ eğitim sırasında üretim/puanlama başlamayacak. Gerçek Tosun job akışı
 ekleyince mevcut `submit_train.sh` üzerinden en az üç seed ile çalışacak.
 
 Şimdilik açık kalanlar [DECISIONS.md](../../DECISIONS.md) içinde: veri/kalite kanalı,
-Hybrid çifti ve label politikası, GraphRouter'da makale–resmi kod tercihi ve UniRoute
-model ayrımı/encoder'ı. Bunları altyapı hazırlığı sırasında kararlaştırmadık.
+Hybrid çifti ve label politikası, UniRoute model ayrımı/encoder'ı. GraphRouter ve
+UniRoute'un çekirdek kodunda SU Lab referansını başlangıç alma tercihi kullanıcı
+yönlendirmesiyle kaydedildi; korunacak fonksiyonlar ve zorunlu adapter farkları
+[eğitim planında](../team/uc_router_egitim_plani.md#referansa-yakın-uygulama-sınırı).
 Üç implementasyon ve gerçek koşular tamamlandıkça aynı yazıya yöntem bölümleri eklenecek.

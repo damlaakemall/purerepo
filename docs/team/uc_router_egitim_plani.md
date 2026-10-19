@@ -66,6 +66,30 @@ DECISIONS'a göre kaldırılmış; yeni paketi baştan yazmalıyız.
 
 Bunlar statik kod incelemesi bulguları; referans eğitimleri bu incelemede çalıştırılmadı.
 
+### Referansa yakın uygulama sınırı
+
+19 Ekim 2026 kullanıcı yönlendirmesi: GraphRouter ve UniRoute için SU Lab'nin
+yukarıda sabitlenen implementasyonu başlangıç alınacak. Yeni bir router yöntemi
+tasarlamak yerine çekirdeği koruyup `Benchmark` ve mevcut runner'a bağlayacağız.
+
+| referanstaki dosya / parça | bizde korunacak |
+|---|---|
+| `graphrouter/gnn.py`: `FeatureAlign`, `EncoderDecoderNet` | aynı boyutlar, iki `GeneralConv`, edge MLP, BatchNorm ve sigmoid dot-product skoru |
+| `graphrouter/gnn.py`: `train_validate`, `predict_edges` | aynı maskeli BCE eğitimi, val macro-F1 checkpoint'i; test çıkarımında train∪val kenarları |
+| `graphrouter/adapter.py`: `SCENARIOS`, reward ve label | üç ağırlık çifti, ham GT effect, maliyet normalizasyonu ve argmax one-hot label |
+| `graphrouter/embedding.py` | MiniLM-L6-v2, mean pooling, L2 normalizasyonu, 256-token sınırı |
+| `uniroute/core.py`: `fit_clusters`, `hard_phi`, `cluster_features` | K-means (`n_init=10`), en yakın merkez ve küme başına hata ortalaması |
+| `uniroute/core.py`: `build_learned_map`, `train_learned_map` | iki 128-boyutlu blok, softmax, sabit Psi ile BCE; aynı optimizer/epoch/batch/lr |
+| `uniroute/router.py`: `select_k`, `train`, `predict` | hard-map val alanıyla K seçimi; öğrenim modellerinin train profili; yeni modellerin val profili |
+| `uniroute/embedding.py` | BGE-base-en-v1.5, CLS pooling, L2 normalizasyonu, 512-token sınırı |
+
+Yalnız ortak veriye bağlantı, USD yerine token proxy, donmuş split/model sırası,
+eksik skorları yanlış cevap saymama ve bilgi sızıntısı düzeltmeleri uyarlanır.
+Referanstaki dosya yazma/okuma, ayrı CLI ve W&B katmanları tekrar taşınmaz; bunlar
+bizde zaten var. Mevcut embedding yardımcısı yukarıdaki ayarlar açıkça verilerek
+kullanılır; bütün router'lara tek encoder veya varsayılan token sınırı dayatılmaz.
+Bu eşleme bir implementasyon ya da sayısal eşdeğerlik testi yapıldığı iddiası değildir.
+
 ## 3. Verinin ortak kullanımı
 
 Mevcut `Benchmark` yeterli temel alanlara sahip:
@@ -168,7 +192,7 @@ scorer'daki referanslı tanım da doğrulanmadan makaleyle birebir kabul edilmem
 
 `llm_routing/routers/graphrouter/{labels,gnn,router}.py` önerilir.
 
-**Açık karar: makale mi, resmi kod mu?** ICLR metni ile resmi kod (`0edfb87`) ağ ve
+**Başlangıç: SU Lab portu ve onun izlediği resmi kod.** ICLR metni ile resmi kod (`0edfb87`) ağ ve
 eğitim ayarlarında birbirini tutmuyor:
 
 | konu | makale (§2.3, §3.4–3.5) | resmi kod / SU Lab portu |
@@ -179,25 +203,27 @@ eğitim ayarlarında birbirini tutmuyor:
 | optimizer / lr | Adam, lr `1e-3`'ten LambdaLR ile 0'a | AdamW, sabit lr `3e-4`, weight decay `1e-4` |
 | normalizasyon | performans ve maliyet ikisi de normalize edilir | maliyet task başına min-max; effect ham |
 
-AGENTS.md "makalenin yöntemini izle" diyor; ancak makaledeki sayılar resmi kodla
-üretilmiş olabilir ve makale metni GAT'ın tam ayarlarını vermiyor. Hangisinin ana
-varyant olacağı **ekip kararıdır** ve implementasyondan önce DECISIONS'a yazılmalı.
-Seçilmeyen taraf explainer'da belgelenmiş sapma olarak yer alır. Bu belgenin
-aşağıdaki ağ ve eğitim tarifi resmi koddan alınmıştır; bu bir öneri, karar değildir.
+Kullanıcının referanstan uzaklaşmama yönlendirmesiyle ana implementasyon SU Lab'nin
+resmi koddan port ettiği ağı izleyecek ([DECISIONS](../../DECISIONS.md)). Sıfırdan
+ayrı bir GAT varyantı eklenmeyecek. Makale metniyle farklar explainer'da korunacak;
+resmi kodu izlemek makaledeki her ayrıntıyla birebir eşleştiğimiz anlamına gelmez.
 
 ```text
 effect = sample-0 GT
-cost_hat(model, source) = o model/kaynağın train token-proxy maliyet ortalaması
+cost_hat(query, model) = B_model / 1000 * (prompt_tokens + E_train[completion_tokens | model, source])
 cost_norm = train'den öğrenilmiş, kaynak başına min-max(cost_hat)
 reward = alpha * effect - beta * cost_norm
 label = one_hot(argmax_model reward)
 ```
 
-Başlangıç maliyet tahminini kaynak başına sabit tutmak küçük ve anlaşılırdır.
-Sonradan prompt uzunluğuna bağlı tahmin eklemek ayrı bir iyileştirme olur. Normalizasyon
-parametreleri yalnız train'de hesaplanır; sıfır aralık açıkça ele alınır. Val/test gerçek
-completion uzunluğu karar özelliklerine girmez. Gerçek test maliyeti sadece seçimden
-sonra evaluator tarafından okunur.
+Bu, referansın `common/cost.py::cost_exante` hesabının token-proxy karşılığıdır:
+prompt uzunluğu bilinir, cevap uzunluğu model/kaynak başına train'den tahmin edilir.
+Önceki model/kaynak başına tamamen sabit maliyet önerisi ana tariften çıkarıldı.
+Prompt token sayıları canonical `long.parquet` içinde zaten saklanıyor; gerekli
+okuma bağlantısı router adapter'ında yapılır. Bunlar girdinin token sayılarıdır;
+gerçek test completion token'ı veya bundan hesaplanan toplam maliyet karar girdisi
+olmaz. Normalizasyon sınırları train'den öğrenilir; sıfır aralık açıkça ele alınır.
+Gerçek test maliyetini yalnız seçimden sonra evaluator okur.
 
 | ayrı eğitim senaryosu | alpha | beta |
 |---|---:|---:|
@@ -220,10 +246,10 @@ boş (`None`) bırakıyor. Tek noktalı native deneyde AIQ karşılaştırması 
 reward/kalite/maliyet tablosu kullanılmalı; ilave eğitim ağırlıklarıyla eğri üretmek
 sonradan açıkça tanımlanabilir.
 
-İlk karşılaştırmada yalnız train kenarlarını çıkarım grafiğinde görünür tutma önerisi
-var. Resmi kodun testte train∪val kenarlarını açması ek etiket bilgisi sağlar; bunu
-uygulamak istenirse aynı adaptasyon verisi diğer yöntemlere de açılıp farklı protokol
-olarak adlandırılmalı. Yeni test sorguları eğitim sonrası eklenir; bu sorguların
+Referans gibi checkpoint seçilirken yalnız train kenarları, son test çıkarımında
+train∪val kenarları görünür olacak. Kullanılan val bağlamı sonuçta açıkça kaydedilir;
+aynı val verisine diğer yöntemler de erişebilir (`fit(train, val)`). Yeni bir train-only
+varyantı ana implementasyona eklemiyoruz. Yeni test sorguları eğitim sonrası eklenir; bu sorguların
 hiçbir effect/reward kenarı görünür değildir. Sorguları ayrı ayrı veya farklı
 batch'lerde değerlendirmek seçimi değiştirmemeli.
 
@@ -234,7 +260,8 @@ izin verilen girdi olmalı. Sadece serbest sorgu metniyle çalışma istenirse t
 öğrenilmiş görev tahmincisi gerekir ve bu ayrı bir varyanttır. Test query ID'sinden
 görev tahmin etmek gizli bir servis varsayımı olmamalı.
 
-MiniLM-L6-v2 ve mean pooling resmi koda uyumlu başlangıçtır. Yedi görev ve 12 model
+Referansın MiniLM-L6-v2, mean pooling, L2 normalizasyonu ve 256-token sınırı korunur.
+Ortak embedding yardımcısının 512 varsayılanı GraphRouter'a aynen taşınmaz. Yedi görev ve 12 model
 için açıklamalar kamuya açık model kartları/görev tanımlarından sabit dosyada hazırlanır;
 test performansından model yeteneği paragrafı yazılmaz, ücretli GPT-4o çağrısı yapılmaz.
 Bu açıklama üretimindeki uyarlama da belgelenir. PyG isteğe bağlı bağımlılık olmalı;
@@ -258,21 +285,24 @@ açılmadan sabit `pool_seed` ile ayrılır. Sorguların donmuş 60/10/30 split'
 K-means train sorgu embedding'lerinde öğrenilir. Final PDF Denklem 12:
 `Psi[model, cluster] = val kümesindeki ortalama hata`;
 `gamma(x, model) = Phi(x) @ Psi[model]` ve seçim `argmin(gamma + λ*cost_hat)`.
-0/1 kaynaklarda hata `1 - correctness`; sürekli GT için `1 - token_F1` kullanmak
-bizim açıkça raporlanan uyarlamamızdır. Ham negatif BARTScore/ArmoRM'yi bu aralığa
+0/1 kaynaklarda hata `1 - correctness`; sürekli GT için referans gibi
+`1 - token_F1` kullanılır. Bu sürekli hedefler makalenin ana accuracy deneyine göre
+uyarlamadır; SU Lab'ye göre yeni bir yöntem değildir. Ham negatif BARTScore/ArmoRM'yi bu aralığa
 hiç işlem yapmadan koymayalım.
 
 K seçimi yeni modellere bakmaz. Ek G.2'deki adaylar `3..floor(N_val/50)`:
 her adayda `H_train` profilini train'den üretip val üzerinde deferral alanıyla seçmek.
 Val küçükse aday aralığının boş olması için smoke config'inde açık sabit K gerekir.
-LearnedMap için aday K değerlendirmesi **öğrenilmiş haritayı da eğiterek** yapılmalı;
-SU Lab'deki `select_k()` yalnız hard map alanıyla K seçiyor.
+Referanstaki `select_k()` gibi LearnedMap'te de K önce hard map alanıyla seçilir;
+seçilen K için learned map bir kez eğitilir. Her K için ek MLP eğitimi yapan önceki
+öneri başlangıç tarifinden çıkarıldı.
 
 Final metnin §5.2'si haritayı eğitirken sabit `Psi(H_train)` için val diyor;
 Ek G.2'nin seçim tarifi ise train profilini kullanıyor. SU Lab çekirdeği train profilini
-seçiyor. Bu ayrımı gizlemeyelim: önerilen uygulama K seçimi için Ek G.2'yi, seçilen K
-ile son LearnedMap fit'i için §5.2'yi izler; kullanılan profil split'i manifestte ayrı
-alan olur. Yeni modellerin profili her durumda yalnız val'den gelir.
+seçiyor. Bu ayrımı gizlemeyelim: referansa yakın ana uygulamada K seçimi ve son
+LearnedMap fit'i için `Psi(H_train)` train'den gelir. Final §5.2'den bu fark
+explainer'da ve profil split'i manifestte yazılır. Yeni modellerin profili her durumda
+yalnız val'den gelir. Ayrı bir profil öğrenme yöntemi eklenmez.
 
 LearnedMap'in final Ek F.3 mimarisi: donmuş embedding, BatchNorm, iki ayrı
 128-boyutlu FC/BN/ReLU blok, FC(K), softmax. Adam, 5 epoch, batch 64, lr `0.005`.
@@ -345,8 +375,9 @@ UniRoute QNC/Area. Genel AIQ'nun UniRoute Area ile aynı olduğu varsayılmaz.
    Eşik raporunu doğrula. Qwen çiftini test açılmadan sabitle.
 3. **UniRoute K-means:** dinamik model protokolünü ve baseline sınırlarını tamamla;
    sonra LearnedMap. Böylece graph'a geçmeden cohort/protokol raporu hazır olur.
-4. **GraphRouter:** resmi ağla üç senaryoyu uygula; kaynak açıklamaları ve train-only
-   graph. Sonra istenirse GraphRouter için de aynı tanıtım bütçeli yeni-model deneyi.
+4. **GraphRouter:** referanstaki ağla üç senaryoyu uygula; kaynak açıklamaları,
+   val seçiminde train, test çıkarımında train∪val graph bağlamı. Sonra istenirse
+   GraphRouter için de aynı tanıtım bütçeli yeni-model deneyi.
 5. **Karşılaştırma:** aynı model havuzu/cohort/metric/protokolde ≥3 seed; ardından
    açıklayıcı notebook'lar ve tek eğitim walkthrough'u. Notebook modülü import eder.
 

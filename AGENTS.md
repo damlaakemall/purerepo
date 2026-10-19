@@ -77,8 +77,10 @@ For Hybrid LLM, GraphRouter and UniRoute, read [docs/team/uc_router_egitim_plani
 first: it lists what to keep from the paper and official code and which reference-repo behaviours not to copy.
 
 **Before writing code.** Open decisions for the paper are listed in [DECISIONS.md](DECISIONS.md) under "Open"
-(e.g. GraphRouter: paper vs. official code). Do not settle them yourself: ask the person you work for, and record the
+(e.g. Hybrid LLM's model pair and label policy). Do not settle them yourself: ask the person you work for, and record the
 answer under "Decided" before relying on it. Pin the paper revision and the official code commit you follow.
+For GraphRouter and UniRoute, the user has chosen the SU Lab reference implementation as the starting point
+(see DECISIONS.md): preserve its core architecture and training flow, and limit changes to our data/protocol adapter.
 
 **What to build.**
 1. `llm_routing/routers/<paper>/`: `labels.py` (the paper's training targets from train/val scores) and `router.py`
