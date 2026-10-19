@@ -5,6 +5,11 @@ eklenir. Amaç LLM-Routing-Project'in ekipçe sürdürülen bir sürümünü gel
 `ours_v1`, `ours_dev`, MixInstruct, RouterBench ve synthetic YAML'ları korunur.
 Yeni ekip koleksiyonları `configs/benchmarks/shared_v1.yaml` ile başlar.
 
+V1 korunarak hazırlanan sonraki sürüm `configs/benchmarks/shared_v2.yaml`'dır (gerçek GPU pilotu bekliyor).
+Veri biçimi yine `protocol: shared-v1`; benchmark sürümü `v2` olması protokol adını değiştirmez.
+V2 model havuzu/ataması, token bütçesi ve Tosun kontrolü [adım 1 yazısında](../walkthrough/01_egitim_verisi.md#shared_v2-19-ekim-2026-hazırlığı)
+anlatılır. Aşağıdaki v1 model/4096-token ayarları eski verinin yeniden üretim kaydıdır.
+
 ## Veri akışı
 
 ```mermaid

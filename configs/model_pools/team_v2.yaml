@@ -1,0 +1,96 @@
+# shared_v2: 12 dense open-weight models; v1's pool stays unchanged.
+# Falcon3-7B-Instruct (7.4556B) replaces the 8.0303B R1 distill model to remove
+# its dedicated long-reasoning regime. Similar size does not mean equal quality.
+# Other revisions are retained from v1; Falcon's revision was checked on 2026-10-19.
+# SmolLM3 thinking remains disabled. All samples use the benchmark's common budget.
+# cost_per_1k_tokens = rounded parameters (B), a token proxy, never USD.
+# Llama and Gemma still need license acceptance by their assigned collector.
+# Large models request one 96 GB RTX PRO 6000 for generation; this is a placement
+# choice from Tosun's 2026-10-19 inventory, pending real v2 memory/throughput pilots.
+# LLMR_GPU_TYPE overrides gpu_type (actual alternatives: a100_80gb, h200_nvl).
+# Scorers keep their own 1-GPU requests; gpu_type here applies only to generation.
+# Total prompt + completion context is capped at 16384, including for Phi-4.
+models:
+  # ---- small (3-4B) ----
+  - name: smollm3-3b
+    model_id: HuggingFaceTB/SmolLM3-3B
+    revision: a07cc9a04f16550a088caea529712d1d335b0ac1
+    chat_template_kwargs: {enable_thinking: false}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 3.1
+  - name: llama-3.2-3b
+    model_id: meta-llama/Llama-3.2-3B-Instruct      # gated
+    revision: 0cb88a4f764b7a12671c53f0838cd831a0843b95
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 3.2
+  - name: phi-4-mini
+    model_id: microsoft/Phi-4-mini-instruct
+    revision: cfbefacb99257ffa30c83adab238a50856ac3083
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 3.8
+  # ---- mid (7-8B) ----
+  - name: mistral-7b-v0.3
+    model_id: mistralai/Mistral-7B-Instruct-v0.3
+    revision: c170c708c41dac9275d15a8fff4eca08d52bab71
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 7.2
+  - name: olmo-3-7b
+    model_id: allenai/Olmo-3-7B-Instruct
+    revision: 6e5971d9eba42665f5bd5a0fcf047f299ce1dccc
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 7.3
+  - name: qwen2.5-7b
+    model_id: Qwen/Qwen2.5-7B-Instruct
+    revision: a09a35458c702b33eeacc393d103063234e8bc28
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 7.6
+  - name: llama-3.1-8b
+    model_id: meta-llama/Llama-3.1-8B-Instruct      # gated
+    revision: 0e9e39f249a16976918f6564b8830bc894c89659
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 8.0
+  - name: falcon3-7b
+    model_id: tiiuae/Falcon3-7B-Instruct
+    revision: 1e57a0ecd176c7c139f289c60a74e57f887c3dfb
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 7.5
+  # ---- large (15-33B) ----
+  - name: phi-4
+    model_id: microsoft/phi-4
+    revision: 2db69c1c3e91a05d2c64a3185acfbaf36f744e25
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}       # its full context
+    cost_per_1k_tokens: 14.7
+    gpus: 1
+    gpu_type: rtx_pro_6000
+  - name: mistral-small-24b
+    model_id: mistralai/Mistral-Small-24B-Instruct-2501
+    revision: 9527884be6e5616bdd54de542f9ae13384489724
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 23.6
+    gpus: 1
+    gpu_type: rtx_pro_6000
+  - name: gemma-3-27b
+    model_id: google/gemma-3-27b-it                 # gated; multimodal checkpoint, used text-only
+    revision: 005ad3404e59d6023443cb575daa05336842228a
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 27.4
+    gpus: 1
+    gpu_type: rtx_pro_6000
+  - name: qwen2.5-32b
+    model_id: Qwen/Qwen2.5-32B-Instruct
+    revision: 5ede1c97bbab6ce5cda5812749b4c0bdf79b18dd
+    chat_template_kwargs: {}
+    engine_kwargs: {max_model_len: 16384}
+    cost_per_1k_tokens: 32.8
+    gpus: 1
+    gpu_type: rtx_pro_6000

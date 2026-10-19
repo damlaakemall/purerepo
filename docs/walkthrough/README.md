@@ -7,7 +7,7 @@ genel işleyişini gerçek bir koşuyla gösterir.
 
 | adım | yazı | durum |
 |---|---|---|
-| 1 | [Router'lar için eğitim verisi üretmek](01_egitim_verisi.md): sorular, modeller, Tosun'da cevap üretme, puanlama, kontrol | pilotla doğrulandı (15 Ekim 2026), tam koleksiyon bekliyor |
+| 1 | [Router'lar için eğitim verisi üretmek](01_egitim_verisi.md): sorular, modeller, Tosun'da cevap üretme, puanlama, kontrol | v1 pilotu doğrulandı; v2 config'leri hazır ve Tosun kontrol edildi (19 Ekim 2026), v2 GPU pilotu/tam koleksiyon bekliyor |
 | 2 | Router'ları eğitmek ve karşılaştırmak (her makale bir bölüm) | sırada |
 
 Önce [routing temelleri](../concepts/routing_fundamentals.md) okunursa bu adımların neden gerektiği kendiliğinden

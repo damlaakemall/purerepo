@@ -68,6 +68,11 @@ srun --partition=cuda --qos=cuda --gres=gpu:1 --mem=32G --time=01:00:00 --pty ba
 
 ## Independent shared-v1 member jobs
 
+For the prepared v2 collection use `configs/benchmarks/shared_v2_pilot.yaml` first, then
+`configs/benchmarks/shared_v2.yaml`. Its `collection_team` selects `team_v2.yaml`; the member names stay
+the same. Large models request one `rtx_pro_6000` GPU for generation only. A v2 GPU pilot has not yet
+validated memory or throughput; see the [walkthrough](../../docs/walkthrough/01_egitim_verisi.md#shared_v2-19-ekim-2026-hazırlığı).
+
 We are three members with four models each; the assignment is in [`team.yaml`](team.yaml) and the team
 procedure (who builds the dataset, who assembles) in the [team workflow](../../docs/team/team_workflow.md#0-üç-kişiyiz-kim-ne-yapar).
 After the dataset is frozen and shared, each member submits all their models with
