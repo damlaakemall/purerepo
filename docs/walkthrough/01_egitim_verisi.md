@@ -39,8 +39,8 @@ Referansın 12 model kimliğiyle karşılaştırmada **ortak model sayısı 0/12
 Yukarıdaki “korunan altı” bizim eski v2 havuzumuzdan korunanlardır; referanstan
 alınmış modeller değildir. Örneğin referansta Qwen3-4B/8B ve Gemma4 varken bizde
 Qwen3-14B/32B ve Gemma3 var. Aynı model ailesinin farklı checkpoint'leri bulunabilir;
-birebir model kimliği ortak değildir. `test_v3_has_no_models_from_the_reference_pool`
-referans commit'indeki listeye karşı bu ayrımı internet gerektirmeden denetler.
+birebir model kimliği ortak değildir. Bu, incelenen referans commit'iyle model
+seçimi sırasında yapılan karşılaştırmanın sonucudur.
 
 ### Donmuş fiyat tablosu
 

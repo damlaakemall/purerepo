@@ -190,17 +190,6 @@ def test_label_manifest_identifies_data_and_policy():
     assert m["fingerprint"] == b.fingerprint() and m["policy_hash"] == m2["policy_hash"] and m["num_labels"] == 60
 
 
-def test_dev_data_carries_model_info():
-    from llm_routing.config import load_benchmark_config
-    from llm_routing.data.loaders import prepare
-
-    b = prepare(load_benchmark_config(os.path.join(ROOT, "configs", "benchmarks", "synthetic_shared.yaml"),
-                                      ["params.n=200", "params.k=2"]))
-    pool = load_benchmark_config(os.path.join(ROOT, "configs", "benchmarks", "shared_v2.yaml"))["models"]
-    assert b.models == [m["name"] for m in pool]  # router configs run unchanged on dev and real data
-    assert b.meta["model_info"]["qwen2.5-32b"]["cost_per_1k_tokens"] == 32
-
-
 @register_router("_test_reads_test_labels")
 class CheatingRouter(Router):
     def __init__(self, models=None, **_):

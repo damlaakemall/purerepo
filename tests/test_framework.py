@@ -7,11 +7,9 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from llm_routing.config import load_experiment  # noqa: E402
-from llm_routing.core.evaluation import aiq, curve, oracle_point, summarize  # noqa: E402
+from llm_routing.core.evaluation import aiq, oracle_point, summarize  # noqa: E402
 from llm_routing.data.benchmark import Benchmark, assign_splits  # noqa: E402
 from llm_routing.data.synthetic import make_synthetic_benchmark  # noqa: E402
-from llm_routing.legacy_pipeline.scorers import get_scorer  # noqa: E402
-from llm_routing.registry import build_router, list_routers  # noqa: E402
 from llm_routing.routers.baselines import OracleRouter  # noqa: E402
 
 
@@ -42,11 +40,6 @@ def test_splits_disjoint_and_deterministic(bench):
     assert not (ids[0] & ids[1]) and not (ids[0] & ids[2]) and not (ids[1] & ids[2])
 
 
-def test_pair_view(bench):
-    p = bench.pair("small", "large")
-    assert p.small_scores.shape == (len(bench), bench.k)
-
-
 def test_oracle_dominates_single_models(bench):
     test = bench.split("test")
     s = summarize(OracleRouter().sweep(test), test)
@@ -60,36 +53,6 @@ def test_aiq_constant_curve():
     assert np.isclose(aiq(pts, 1.0, 3.0), 0.5)
 
 
-@pytest.mark.parametrize("cfg", [
-    {"type": "quality_regression", "models": None},
-    {"type": "random_binary", "models": {"small": "tiny", "large": "large"}},
-])
-def test_every_router_produces_valid_decisions(cfg, bench):
-    r = build_router(cfg, seed=0)
-    from llm_routing.runner import candidate_models
-    sub = bench.select_models(candidate_models(r, bench))
-    r.fit(sub.split("train"), sub.split("val"))
-    test = sub.split("test")
-    ds = r.sweep(test, 11)
-    assert len(ds) == 11
-    for d in ds:
-        assert d.choice.shape == (len(test),) and d.cost.shape == (len(test),)
-        assert d.choice.min() >= 0 and d.choice.max() < test.num_models
-    pts = curve(ds, test)
-    assert pts[0, 0] <= pts[-1, 0] + 1e-9  # cheapest first
-
-
-def test_registry_lists_routers():
-    assert {"oracle", "quality_regression", "random_binary"} <= set(list_routers())
-
-
-def test_experiment_configs_load():
-    root = os.path.join(os.path.dirname(__file__), "..", "configs", "experiments")
-    for f in os.listdir(root):
-        cfg = load_experiment(os.path.join(root, f), ["seed=3"])
-        assert cfg["seed"] == 3 and "type" in cfg["router"] and "loader" in cfg["benchmark"]
-
-
 def test_end_to_end_run(tmp_path):
     from llm_routing.runner import run_experiment
     cfg = load_experiment(os.path.join(os.path.dirname(__file__), "..", "configs", "experiments",
@@ -98,13 +61,6 @@ def test_end_to_end_run(tmp_path):
     rec = run_experiment(cfg)
     assert os.path.exists(os.path.join(rec["run_dir"], "metrics.json"))
     assert {r["router"] for r in rec["results"]} >= {"quality_regression", "oracle"}
-
-
-def test_scorers():
-    em = get_scorer("exact_match_number")
-    assert em(["so the answer is 1,234."], ["blah #### 1234"]).tolist() == [1.0]
-    mc = get_scorer("multiple_choice")
-    assert mc(["The answer is B because"], ["B"]).tolist() == [1.0]
 
 
 def test_router_test_pool_restricts_evaluation_and_baselines(tmp_path):

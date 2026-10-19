@@ -28,6 +28,11 @@ This repo is for **learning** how routers work, so an implementation should read
 6. **Docs**: write `docs/papers/<paper>.md` using [`docs/papers/_template.md`](docs/papers/_template.md), and add a row to [docs/concepts/comparison.md](docs/concepts/comparison.md) and the README table.
 7. **Tests**: add the router config to `test_check_router` in `tests/test_router_infra.py`, plus unit tests for the paper-specific parts in `tests/test_<paper>.py`. Then run `llmr check-router configs/routers/<paper>.yaml`: it perturbs test scores, costs, every `extras` outcome channel (public `prompt_tokens` stays fixed) and gold references; for a dynamic pool it also removes the new models' train scores/costs/extras. It checks that decisions stay unchanged and that `describe()` can be saved by the runner's JSON serializer. Return plain Python values there (e.g. NumPy arrays via `.tolist()`).
 
+Tests should verify method calculations, information boundaries, data integrity and actual regressions.
+Do not copy model lists, team assignments, dated prices or fixed config choices into assertions;
+use small toy inputs for behavioral checks. Avoid duplicating checks already covered by `check-router`
+or an existing integration test.
+
 ### Rules that keep the comparison fair
 
 - `fit` may only use the `train` split, plus `val` for tuning or early stopping. **Never read `test`.** `llmr check-router` checks the part of this that can be checked automatically.

@@ -134,12 +134,25 @@ artık bu config'i kullanır. Önceki bölümdeki 97-test kaydı önceki hazırl
 | USD release regresyonu | 30 soru × 2 fiyatlı model × 2 sample = 120 yanıt; assemble → validate → load → evaluate → baseline train geçti |
 | muhasebe | 1000 input + 2000 output için Llama3.2-3B `$0.00071`; tarife değişmiş config ile release yükleme reddedildi |
 
-Yeni testler ayrıca eksik/negatif/NaN/sonsuz fiyatın generation'dan önce reddini,
-yeni havuzun 6 modeli revision'larıyla korumasını, kaynak/split/scoring protokolünün
-korunmasını, public prompt uzunluğu ile gizli completion ayrımını ve HF conditional
-model sınıfını test double ile kontrol eder. Gerçek ağırlık/tokenizer indirilmedi.
+İşlevsel testler ayrıca eksik/negatif/NaN/sonsuz fiyatın generation'dan önce reddini,
+public prompt uzunluğu ile gizli completion ayrımını ve HF conditional model sınıfını
+test double ile kontrol eder. Gerçek ağırlık/tokenizer indirilmedi.
 Sentetik başarı skorları model/router başarımı diye raporlanmaz; gerçek v3 GPU
 pilotundan sonra toplanan veriyle üç router'ın implementasyon/eğitimi yapılacak.
+
+## Testlerin sadeleştirilmesi
+
+Model havuzu, referansla ortak model olup olmadığı, ekip ataması ve sabit config
+tercihlerini kopyalayan testler kaldırıldı. Basit pair-view/registry kontrolleri ve
+mevcut router denetimi/puanlama testlerini tekrarlayan senaryolar da çıkarıldı.
+Maliyet testleri `tests/test_costs.py` içinde örnek modeller ve tarifelerle çalışır;
+gerçek havuzun veya tarihli fiyatların değişmesi muhasebe testini yeniden yazdırmaz.
+Kaydet–yükle fingerprint regresyonu ve public input/gizli çıktı ayrımı korunur.
+
+Bu temizlik 111 senaryoyu 96'ya indirdi. Makale hesabı, train/val/test sınırı,
+eksik skorlar, donmuş veri bütünlüğü, maliyet hesabı ve uçtan uca akış kontrolleri
+korundu. Yerel CPU'da `.venv/bin/pytest -q` çalıştırıldı: **96 geçti, 11.56 saniye**.
+Yukarıdaki 97/110 sayıları önceki hazırlık koşularının tarihsel kaydıdır.
 
 ## Sırada ne var?
 
