@@ -10,7 +10,7 @@ Implementations of LLM **routing** papers, written to understand *what* each rou
 
 | paper | family | how it decides | code | explainer |
 |---|---|---|---|---|
-| *quality regression* (RouterBench baseline) | multi-model | predict every model's quality, pick argmax(quality − λ·cost) | [`routers/baselines.py`](llm_routing/routers/baselines.py) | [docs](docs/comparison.md) |
+| *quality regression* (RouterBench baseline) | multi-model | predict every model's quality, pick argmax(quality − λ·cost) | [`routers/baselines.py`](llm_routing/routers/baselines.py) | [docs](docs/concepts/comparison.md) |
 | *next paper…* | | | | |
 
 ## Where to start
@@ -18,14 +18,14 @@ Implementations of LLM **routing** papers, written to understand *what* each rou
 | I want to... | read / run |
 |---|---|
 | understand what we are doing and why (Türkçe) | [docs/walkthrough/](docs/walkthrough/README.md): each finished project step in one write-up, with a real run. Step 1: [producing the router training data](docs/walkthrough/01_egitim_verisi.md) |
-| learn routing itself | [routing fundamentals](docs/routing_fundamentals.md) → [how routers are compared](docs/comparison.md) → [benchmarks & fairness rules](docs/benchmarks.md) → [metrics](docs/evaluation.md) |
+| learn routing itself | [routing fundamentals](docs/concepts/routing_fundamentals.md) → [how routers are compared](docs/concepts/comparison.md) → [benchmarks & fairness rules](docs/concepts/benchmarks.md) → [metrics](docs/concepts/evaluation.md) |
 | check the code on my laptop | [Quick start](#quick-start-laptop-cpu) below: `pytest -q`, `llmr smoke-pipeline` |
 | generate and score a model on Tosun | [cluster/tosun/README.md](cluster/tosun/README.md); run the 30-query pilot `configs/benchmarks/shared_pilot.yaml` first |
-| add a router (paper) | [CONTRIBUTING.md](CONTRIBUTING.md) and the [router contract](docs/router_contract.md) |
+| add a router (paper) | [CONTRIBUTING.md](CONTRIBUTING.md) and the [router contract](docs/team/router_contract.md) |
 | see what is decided / still open | [DECISIONS.md](DECISIONS.md) (open: cost proxy, mixed quality scales, shared accounts, GPUs for the large models, token limit for the reasoning model) |
 | work on it with an AI agent | [AGENTS.md](AGENTS.md): map, commands, rules that must not break |
 
-**Learning path:** [routing fundamentals](docs/routing_fundamentals.md) → [how routers are compared](docs/comparison.md) → [benchmarks & fairness rules](docs/benchmarks.md) → [metrics](docs/evaluation.md) → [current leaderboard](results/leaderboard.md).
+**Learning path:** [routing fundamentals](docs/concepts/routing_fundamentals.md) → [how routers are compared](docs/concepts/comparison.md) → [benchmarks & fairness rules](docs/concepts/benchmarks.md) → [metrics](docs/concepts/evaluation.md) → [current leaderboard](results/leaderboard.md).
 
 ## Team collection protocol
 
@@ -35,9 +35,9 @@ query IDs/splits, independent member/model shards, sample-level resume/retry,
 separate ground-truth, offline ArmoRM and BARTScore scoring, validated contribution bundles,
 and immutable long/wide releases with hashes and per-metric benchmark views.
 
-Start with the [team guide (Türkçe)](docs/team_workflow.md),
-[technical data protocol](docs/shared_protocol.md), and
-[router extension contract](docs/router_contract.md).
+Start with the [team guide (Türkçe)](docs/team/team_workflow.md),
+[technical data protocol](docs/team/shared_protocol.md), and
+[router extension contract](docs/team/router_contract.md).
 
 ```bash
 llmr smoke-pipeline --output /tmp/llmr-shared-smoke  # test doubles only; no models or training
@@ -70,11 +70,17 @@ llm_routing/
   core/        base.py (Router, BinaryRouter, MultiModelRouter, CascadeRouter), evaluation.py, classifiers.py
   routers/     one folder per paper + baselines.py
   data/        benchmark.py (shared format), mixinstruct / routerbench / synthetic loaders, hub.py
-  pipeline/    build our own benchmark: build-queries -> generate -> score -> assemble
+  collection/  team data (shared_v1): build-queries -> generate -> score -> package -> assemble
+  ground_truth/ audited answer-key evaluators used by collection/
+  legacy_pipeline/ older single-user benchmark (ours_v1); kept so its configs still run
   runner.py    the single train+evaluate procedure;  cli.py: the `llmr` command
 configs/       benchmarks/, routers/, experiments/
 cluster/tosun/ SLURM setup + job scripts for Sabancı's Tosun cluster
-docs/          fundamentals, comparison, benchmarks, evaluation, one explainer per paper
+docs/
+  concepts/    routing fundamentals, comparison, benchmarks, evaluation (English)
+  team/        team workflow, data protocol, router contract (Türkçe)
+  walkthrough/ how each project step was done and why (Türkçe)
+  papers/      one explainer per paper
 ```
 
 ## Quick start (laptop, CPU)
@@ -102,7 +108,7 @@ bash cluster/tosun/submit_train.sh configs/experiments/<router>__shared_v1.yaml 
 
 ## Adding a router or benchmark
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). In short: one folder in `llm_routing/routers/`, one YAML in `configs/routers/`, one explainer in `docs/papers/`, one row in [docs/comparison.md](docs/comparison.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: one folder in `llm_routing/routers/`, one YAML in `configs/routers/`, one explainer in `docs/papers/`, one row in [docs/concepts/comparison.md](docs/concepts/comparison.md).
 
 ## Results so far
 

@@ -81,8 +81,8 @@ def _bartscore(**kw):
 
 @register_scorer("exact_match_number")
 def _exact_number(**_):
-    from .ground_truth.evaluators import _gsm8k_strict
-    from .ground_truth.metrics import extract_gsm8k_answer
+    from ..ground_truth.evaluators import _gsm8k_strict
+    from ..ground_truth.metrics import extract_gsm8k_answer
 
     def score(responses, references):
         return np.array([float(_gsm8k_strict(r or "", extract_gsm8k_answer(ref) or "")[0]) for r, ref in zip(responses, references)])
@@ -91,7 +91,7 @@ def _exact_number(**_):
 
 @register_scorer("multiple_choice")
 def _multiple_choice(**_):
-    from .ground_truth import evaluate
+    from ..ground_truth import evaluate
 
     def score(responses, references):
         return np.array([evaluate("mcq", r or "", ref.strip()[:1].upper(), answer_type="mcq_letter").score

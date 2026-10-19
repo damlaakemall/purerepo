@@ -30,4 +30,4 @@ Given a query and a pool of LLMs with different costs and abilities, **choose wh
 
 ## Adding a new paper to this repo
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) and fill in a router card in [comparison.md](comparison.md).
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) and fill in a router card in [comparison.md](comparison.md).

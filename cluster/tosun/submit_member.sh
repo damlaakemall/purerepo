@@ -12,8 +12,8 @@ CFG="$1"; MODEL="$2"; MEMBER="$3"; NUM_SHARDS="${4:-1}"
 read -r GPUS CHANNELS < <(python - "$CFG" "$MODEL" <<'PY'
 import sys
 from llm_routing.config import load_benchmark_config
-from llm_routing.pipeline.shared import channels
-from llm_routing.pipeline.shared.dataset import load_dataset, model_pool
+from llm_routing.collection import channels
+from llm_routing.collection.dataset import load_dataset, model_pool
 cfg = load_benchmark_config(sys.argv[1])
 load_dataset(cfg)  # hash-check before reserving GPUs
 print(int(model_pool(cfg)[sys.argv[2]].get("gpus", 1)), ",".join(channels(cfg)))
@@ -24,7 +24,7 @@ COMMON=(--parsable --partition="$LLMR_PARTITION" --array="0-$((NUM_SHARDS-1))")
 [ -z "$LLMR_ACCOUNT" ] || COMMON+=(--account="$LLMR_ACCOUNT")
 [ -z "$LLMR_QOS" ] || COMMON+=(--qos="$LLMR_QOS")
 [ -z "$LLMR_EXCLUDE" ] || COMMON+=(--exclude="$LLMR_EXCLUDE")
-JOB=cluster/tosun/jobs/shared_member.sbatch
+JOB=cluster/tosun/jobs/member.sbatch
 GEN=$(sbatch "${COMMON[@]}" --gres="$(llmr_gres "$GPUS")" --mem=$((64 * GPUS))G --cpus-per-task=$((8 * GPUS)) \
       "$JOB" "$CFG" "$MODEL" "$MEMBER" "$NUM_SHARDS" generate)
 GEN="${GEN%%;*}"

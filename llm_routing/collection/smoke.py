@@ -1,7 +1,7 @@
 """Exercise collection -> scoring -> packaging -> release -> evaluation, with test doubles only."""
 from pathlib import Path
 
-from ...config import REPO_ROOT, load_benchmark_config
+from ..config import REPO_ROOT, load_benchmark_config
 from .assemble import assemble, package, validate_release, frozen_dir
 from .collect import generate, score
 from .dataset import build_queries

@@ -1,4 +1,6 @@
-"""Build OUR OWN benchmark: queries -> responses (per model) -> scores (per model) -> frozen Benchmark.
+"""Legacy single-user pipeline (`ours_v1`); team `shared-v1` data lives in `llm_routing.collection`.
+
+Build OUR OWN benchmark: queries -> responses (per model) -> scores (per model) -> frozen Benchmark.
 
     llmr build-queries configs/benchmarks/ours_v1.yaml          # CPU, once
     llmr generate      configs/benchmarks/ours_v1.yaml --model X   # GPU, one job per model
@@ -48,9 +50,6 @@ def _read_queries(path: str) -> list[dict]:
 
 
 def build_queries(cfg: dict) -> None:
-    if cfg.get("protocol") == "shared-v1":
-        from .shared.dataset import build_queries as shared_build
-        return shared_build(cfg)
     from datasets import load_dataset
 
     rows = []
@@ -81,9 +80,6 @@ def _model_cfg(cfg: dict, name: str) -> dict:
 
 
 def generate(cfg: dict, model: str, **job_options) -> None:
-    if cfg.get("protocol") == "shared-v1":
-        from .shared.collect import generate as shared_generate
-        return shared_generate(cfg, model, **job_options)
     if job_options:
         raise ValueError("member/shard options require protocol: shared-v1")
     m = _model_cfg(cfg, model)
@@ -95,9 +91,6 @@ def generate(cfg: dict, model: str, **job_options) -> None:
 
 
 def score(cfg: dict, model: str, **job_options) -> None:
-    if cfg.get("protocol") == "shared-v1":
-        from .shared.collect import score as shared_score
-        return shared_score(cfg, model, **job_options)
     if job_options:
         raise ValueError("separate scorer/member/shard options require protocol: shared-v1")
     m = _model_cfg(cfg, model)
@@ -129,9 +122,6 @@ def score(cfg: dict, model: str, **job_options) -> None:
 
 
 def assemble(cfg: dict) -> Benchmark:
-    if cfg.get("protocol") == "shared-v1":
-        from .shared.assemble import assemble as shared_assemble
-        return shared_assemble(cfg)
     rows = _read_queries(cfg["path"])
     names = [m["name"] for m in cfg["models"]]
     S, C = [], []
@@ -147,7 +137,7 @@ def assemble(cfg: dict) -> Benchmark:
     b = Benchmark(cfg["name"], [r["id"] for r in rows], [r["query"] for r in rows], names,
                   np.stack(S, axis=1), np.stack(C, axis=1), np.array([r["split"] for r in rows]),
                   sources=[r["source"] for r in rows], references=[r["reference"] for r in rows],
-                  meta={"generator": "llm_routing.pipeline", "generation": dict(cfg["generation"]),
+                  meta={"generator": "llm_routing.legacy_pipeline", "generation": dict(cfg["generation"]),
                         "models": {m["name"]: m["hf_id"] for m in cfg["models"]},
                         "scorers": {s["name"]: s["scorer"] for s in cfg["sources"]},
                         "cost_unit": "cost_per_1k_tokens * tokens / 1000"},

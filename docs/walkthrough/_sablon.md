@@ -35,4 +35,4 @@ Sonucun doğru olduğunu gösteren kontroller ve beklenen değerler.
 ## İlgili dosyalar
 
 - kod: `...`
-- ayrıntılı kural: `docs/shared_protocol.md#...`
+- ayrıntılı kural: `docs/team/shared_protocol.md#...`

@@ -1,6 +1,6 @@
 # Comparing routers: what they do and how
 
-One row per router. Fill in a row when you add a paper. Numbers live in the [leaderboard](../results/leaderboard.md); this page is about **principles**.
+One row per router. Fill in a row when you add a paper. Numbers live in the [leaderboard](../../results/leaderboard.md); this page is about **principles**.
 
 ## Design axes
 

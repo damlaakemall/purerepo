@@ -181,7 +181,7 @@ class Benchmark:
             os.makedirs(os.path.join(path, "extras"), exist_ok=True)
             for name, value in self.extras.items():
                 np.save(os.path.join(path, "extras", name + ".npy"), value)
-        from ..pipeline.shared.io import file_hash
+        from ..collection.io import file_hash
         from pathlib import Path
         artifacts = [Path(path) / n for n in ("queries.jsonl", "scores.npy", "costs.npy")]
         artifacts += [Path(path) / "extras" / (name + ".npy") for name in self.extras]
@@ -200,7 +200,7 @@ class Benchmark:
             man = json.load(f)
         extra_names = man.get("extras", [])
         if man.get("outputs"):
-            from ..pipeline.shared.io import verify
+            from ..collection.io import verify
             verify(path, ("queries.jsonl", "scores.npy", "costs.npy", *(f"extras/{n}.npy" for n in extra_names)))
         ids, qs, splits, srcs, refs = [], [], [], [], []
         with open(os.path.join(path, "queries.jsonl")) as f:

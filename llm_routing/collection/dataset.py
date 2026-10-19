@@ -14,7 +14,7 @@ def model_pool(cfg):
     names = [m["name"] for m in models]
     if not models or len(names) != len(set(names)):
         raise ValueError("model names must be nonempty and unique")
-    from ...data.benchmark import safe_name
+    from ..data.benchmark import safe_name
     if any(not isinstance(n, str) or not n.strip() or not safe_name(n).strip(".") for n in names):
         raise ValueError("invalid model name")
     if len({safe_name(n) for n in names}) != len(names):

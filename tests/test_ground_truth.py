@@ -1,11 +1,11 @@
 """Ground-truth scoring: the reference repo's regression cases plus the fixes made here."""
 import pytest
 
-from llm_routing.pipeline.ground_truth import score_query
-from llm_routing.pipeline.ground_truth.evaluators import (
+from llm_routing.ground_truth import score_query
+from llm_routing.ground_truth.evaluators import (
     _bbh_fallback, _bbh_strict, _gsm8k_strict, _mbpp_strict, _mmlupro_strict, _olympiad_strict,
 )
-from llm_routing.pipeline.shared import formatters as F
+from llm_routing.collection import formatters as F
 
 
 # ---- ported from SU Lab LLM-Routing-Project tests/scoring/test_ground_truth_regressions.py ----
@@ -86,6 +86,6 @@ def test_formatters_match_their_evaluators():
 
 
 def test_legacy_scorers_use_the_hardened_evaluators():
-    from llm_routing.pipeline.scorers import get_scorer
+    from llm_routing.legacy_pipeline.scorers import get_scorer
     assert get_scorer("multiple_choice")(["A cache is a store."], ["A"]).tolist() == [0.0]
     assert get_scorer("exact_match_number")(["### Final Answer:\n**1,128**"], ["x #### 1128"]).tolist() == [1.0]

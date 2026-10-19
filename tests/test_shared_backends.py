@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from llm_routing.pipeline.shared.backends import Generator
+from llm_routing.collection.backends import Generator
 
 
 class Tokenizer:
@@ -83,7 +83,7 @@ def test_template_opened_think_block_is_put_back(monkeypatch):
 
 
 def test_strip_think_matches_reference():
-    from llm_routing.pipeline.shared.collect import answer_text
+    from llm_routing.collection.collect import answer_text
     assert answer_text("<think>\nmaybe (D)</think>\nAnswer: (B)", "strip_think") == "Answer: (B)"
     assert answer_text("<Thinking>x</Thinking> ok", "strip_think") == "ok"
     assert answer_text("<think>\ncut off mid-thought, Answer: (D)", "strip_think") == ""  # truncated: no answer

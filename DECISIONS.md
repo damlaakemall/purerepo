@@ -24,7 +24,7 @@ A log of team decisions that shape the comparison. **Check "Open" before the fir
 | 2026-10-15 | The earlier Hybrid LLM implementation (code, configs, explainer, results) was removed; it is re-implemented on `shared_v1` like the other routers. | Every router built the same way, on the same new data. |
 | 2026-10-15 | BARTScore is a third quality channel in `shared_v1` (`views/bartscore`), computed exactly as the reference repo does: sum of log p(response \| prompt) under `facebook/bart-large`, on every response, no reference answer. | For Hybrid LLM; same definition as the reference (verified identical on real `bart-large`). |
 | 2026-10-15 | Splits as in the reference: near-duplicate groups (MiniLM cosine ≥ 0.99) kept in one split, then 60/10/30 within every source (`seed ^ crc32(source)`). | No paraphrase twin across train/test; equal ratios per source. On real data 719 of 753 grouped prompts are templated BBH items. |
-| 2026-10-15 | Planned routers: Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT. Implemented by the team; the data release provides what each needs (`docs/router_contract.md`). | Team plan. |
+| 2026-10-15 | Planned routers: Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT. Implemented by the team; the data release provides what each needs (`docs/team/router_contract.md`). | Team plan. |
 | 2026-10-13 | Routers are re-implemented from each paper and trained by us on the shared data (no released checkpoints); encoders start from the pretrained models the papers use. | Fair comparison: the only difference between routers is the method. |
 | 2026-10-13 | Data: public benchmarks (MixInstruct, RouterBench) now, plus our own generated benchmark (`ours_v1`) as the main comparison. | Compare right away; own data gives k=10 samples and full control. |
 | 2026-10-13 | Frozen datasets live on Tosun and in a private Hugging Face dataset repo. | Everyone uses byte-identical data (fingerprint-checked). |
@@ -37,4 +37,4 @@ A log of team decisions that shape the comparison. **Check "Open" before the fir
 `shared_v1` adds member collection and immutable releases; existing benchmark configs and
 results remain unchanged. GT and ArmoRM are separate channels; missing gold stays null.
 Pool, revisions and Tosun settings are decided (above); the private Hub repository and
-the cost definition remain open. See [team workflow](docs/team_workflow.md).
+the cost definition remain open. See [team workflow](docs/team/team_workflow.md).

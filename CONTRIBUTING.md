@@ -23,7 +23,7 @@ This repo is for **learning** how routers work, so an implementation should read
 3. **Register the module** in `ROUTER_MODULES` in [`registry.py`](llm_routing/registry.py).
 4. **Config**: add `configs/routers/<paper>.yaml` (a fast CPU variant) and, if the paper uses a large encoder, `<paper>_<encoder>.yaml` with the paper's exact setup.
 5. **Experiments**: add `configs/experiments/<paper>__<benchmark>.yaml` for synthetic and `shared_v1` (the main comparison); a public benchmark (MixInstruct, RouterBench) is optional.
-6. **Docs**: write `docs/papers/<paper>.md` using [`docs/papers/_template.md`](docs/papers/_template.md), and add a row to [docs/comparison.md](docs/comparison.md) and the README table.
+6. **Docs**: write `docs/papers/<paper>.md` using [`docs/papers/_template.md`](docs/papers/_template.md), and add a row to [docs/concepts/comparison.md](docs/concepts/comparison.md) and the README table.
 7. **Tests**: add the router config to `test_every_router_produces_valid_decisions` in `tests/test_framework.py`, plus unit tests for the paper-specific parts.
 
 ### Rules that keep the comparison fair
@@ -45,8 +45,8 @@ This repo is for **learning** how routers work, so an implementation should read
 
 ## Shared collection and future papers
 
-Use [the team workflow](docs/team_workflow.md) for member contributions and
-[the router contract](docs/router_contract.md) for paper-native labels, architecture,
+Use [the team workflow](docs/team/team_workflow.md) for member contributions and
+[the router contract](docs/team/router_contract.md) for paper-native labels, architecture,
 loss and inference. Shared artifacts never contain a universal router label.
 `Decision.sample_index` identifies the returned sample; `Decision.cost` includes all
 paid calls. Run `llmr smoke-pipeline --output /tmp/llmr-shared-check` before submitting.

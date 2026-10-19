@@ -72,4 +72,4 @@ For the new protocol use `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` after
 freezing/sharing the dataset. It requests the model's `gpus` (2 for the 24B, 27B and 32B models), then runs
 GT (CPU), ArmoRM (1 GPU) and BARTScore (1 GPU, if configured) scoring in parallel and packages the shard; it never submits router training.
 `LLMR_BATCH_SIZE` (default 256) is how many requests go to vLLM at once. The older `submit_pipeline.sh` continues
-to serve the original ours_v1/ours_dev configs. See [team workflow](../../docs/team_workflow.md).
+to serve the original ours_v1/ours_dev configs. See [team workflow](../../docs/team/team_workflow.md).

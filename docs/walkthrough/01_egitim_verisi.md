@@ -57,7 +57,7 @@ Adım 3–5 her model için bir üye tarafından ayrı yapılır; sorular herkes
   hakemi gerekmiyor. Alpaca ve Multi-News'te kesin cevap yok; bunlar serbest metin kalitesi için.
 
 **Prompt'lar** modelden cevabı, puanlayıcının ilk baktığı biçimde ister
-([`formatters.py`](../../llm_routing/pipeline/shared/formatters.py)): GSM8K'da son satır `Answer: <sayı>`,
+([`formatters.py`](../../llm_routing/collection/formatters.py)): GSM8K'da son satır `Answer: <sayı>`,
 şıklılarda `Answer: X`, OlympiadBench'te `\boxed{}`, MBPP'de tek bir ` ```python ` bloğu. Böylece cevap çoğunlukla
 kesin bir kuralla okunur.
 
@@ -164,7 +164,7 @@ makalesindekini alacak. Kanallar asla karıştırılmaz; birinin eksiği diğeri
 | **BARTScore** | BART, bu prompt'tan sonra bu cevabı ne kadar olası buluyor? | negatif, 0'a yakın iyi | Hybrid LLM |
 
 **GT nasıl karar veriyor.** Her soru bir cevap tipi taşır
-([`evaluators.py`](../../llm_routing/pipeline/ground_truth/evaluators.py)). Önce kesin kural denenir; olmazsa
+([`evaluators.py`](../../llm_routing/ground_truth/evaluators.py)). Önce kesin kural denenir; olmazsa
 yalnız şıklı sorularda düzyazıdan şıkkı kurtarmaya çalışan bir yedek kural:
 
 - **sayı (GSM8K):** "Final Answer", `Answer: n`, `\boxed{}`, `#### n`; bulunamazsa son sayı. `1,000` = `1000`.
@@ -239,8 +239,8 @@ karşılaştırması değil, doğruluk kontrolü.
 ## Sırada ne var
 
 1. Tam koleksiyon: üyeler modelleri `shared_v1.yaml` ile çalıştırır, koordinatör `llmr assemble` /
-   `validate-data` / `evaluate-data` ile tek tabloyu yayımlar (kurallar: [ekip rehberi §4](../team_workflow.md#4-paketleri-teslim-et-ve-birleştir)).
+   `validate-data` / `evaluate-data` ile tek tabloyu yayımlar (kurallar: [ekip rehberi §4](../team/team_workflow.md#4-paketleri-teslim-et-ve-birleştir)).
 2. Router'lar: her makale bu tablonun train kısmıyla eğitilir; her biri için ayrı bir anlatım yazılacak.
 
-Ayrıntılı kurallar ve dosya biçimleri: [teknik protokol](../shared_protocol.md). Açık kararlar (maliyet tanımı,
+Ayrıntılı kurallar ve dosya biçimleri: [teknik protokol](../team/shared_protocol.md). Açık kararlar (maliyet tanımı,
 büyük modeller için GPU sayısı): [DECISIONS.md](../../DECISIONS.md).

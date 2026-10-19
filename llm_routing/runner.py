@@ -82,7 +82,7 @@ def run_experiment(cfg: dict) -> dict:
     train, val, test = sub.split("train"), sub.split("val"), sub.split("test")
     coverage = None
     if bench.meta.get("protocol") == "shared-v1":
-        from .pipeline.shared.evaluate import complete_cohort
+        from .collection.evaluate import complete_cohort
         before = {s: len(sub.split(s)) for s in ("train", "val", "test")}
         train, val, test = (complete_cohort(b) for b in (train, val, test))
         coverage = {s: {"available": before[s], "scored": len(b), "query_ids": b.query_ids}

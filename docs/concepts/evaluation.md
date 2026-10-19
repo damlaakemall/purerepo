@@ -7,7 +7,7 @@ Every router produces a list of **operating points** by turning its knob: a thre
 
 Together these points form the router's **quality–cost curve**, which is plotted for every run (`curve.png`). The single models appear as points, and the random router and the oracle as dashed lines.
 
-## Summary numbers ([`core/evaluation.py`](../llm_routing/core/evaluation.py))
+## Summary numbers ([`core/evaluation.py`](../../llm_routing/core/evaluation.py))
 
 | metric | definition | better |
 |---|---|---|
