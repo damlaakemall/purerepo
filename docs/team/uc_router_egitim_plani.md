@@ -48,8 +48,7 @@ Kod incelemesinin sabit noktaları:
 | Hybrid'in makalede verilen `m365-core/hybrid_llm_routing` adresi | GitHub API kontrolü 404 döndü | erişilebilir resmi implementasyon doğrulanamadı; üçüncü taraf bir MLP'yi orijinal yöntem saymayacağız |
 | UniRoute | incelenen makale/yazar sayfalarında erişilebilir resmi implementasyon bulunamadı | SU Lab yeniden implementasyonu yardımcı; ICLR final metni esas |
 
-SU Lab reposu yerelde `/Users/ibrahimgozlukaya/Downloads/LLM-Routing-Project` konumunda
-okundu. Uzaktan erişim 404 verdi; bu, reponun yok olduğunu kanıtlamaz. Referansın
+SU Lab reposu yukarıdaki commit'te yerel bir checkout'tan okundu. Uzaktan erişim 404 verdi; bu, reponun yok olduğunu kanıtlamaz. Referansın
 `routers/` dizininde Hybrid LLM implementasyonu yok. Bizdeki önceki Hybrid de
 DECISIONS'a göre kaldırılmış; yeni paketi baştan yazmalıyız.
 
@@ -118,6 +117,18 @@ eşitlik sık görülür.
 `t*`, Denklem 3'ün train üzerindeki ortalama ikili label uzaklığını büyüten değeri.
 Bunu yalnız sınıf oranını %50'ye yaklaştırmakla değiştirmeyelim. Aday t değerleri
 train farklarından türetilip kaydedilebilir; eşit optimumda küçük t seçilir.
+
+**0/1 GT'de `r_trans`, `r_prob`'a indirgenir.** Beş 0/1 kaynakta `Δ_j ∈ {-1, 0, 1}`
+olur. `0 <= t < 1` için `Δ_j >= -t` ile `Δ_j >= 0` aynı label'ı verir. `t >= 1`
+olunca bütün label'lar 1 olur ve Denklem 3'ün amacı 0'a düşer. Yani bu kaynaklarda
+`r_trans` label'ı `r_prob` label'ıyla aynıdır. `t*`'ı ve iki varyant arasındaki farkı
+yalnız sürekli token F1 olan Alpaca ve Multi-News belirler. Makale `r_trans`'ı büyük
+kalite farkında dengesiz BARTScore label'ları için önerdi; GT ana deneyimiz bu durumu
+çoğunlukla sınamıyor. Bu yüzden `r_prob` de ana sette koşulmalı. Kaynak bazında label
+dağılımı ve `r_trans`/`r_prob` label'larının aynı olduğu soru oranı raporlanmalı.
+Aynı sebeple sınırdaki `>=`/`>` seçimi önemlidir: `>=` ile iki modelin de doğru
+(ya da ikisinin de yanlış) olduğu eşitlikler "kolay" (1) sayılır, `>` ile 0 sayılır.
+Bu seçim 0/1 kaynaklarda label'ları t'den çok daha fazla değiştirir; DECISIONS'a yazılmalı.
 Hedefler aynı BCE loss'la öğrenilir. DeBERTa-v3-large, 5 epoch ve val checkpoint
 seçimi makale tarifidir. CPU TF-IDF varyantı yalnız entegrasyon kontrolü olarak
 ayrı isimle bulunmalı. Mevcut `core/classifiers.py` yeniden kullanılabilir, ancak
@@ -153,11 +164,24 @@ scorer'daki referanslı tanım da doğrulanmadan makaleyle birebir kabul edilmem
 
 ## 5. GraphRouter: senaryo başına ayrı öğrenme
 
-`llm_routing/routers/graphrouter/{labels,gnn,router}.py` önerilir. Resmi kodun
-FeatureAlign + iki `torch_geometric.nn.GeneralConv` katmanı korunmalı. Görev
-embedding'i query embedding'iyle birleştirilir; resmi implementasyon bunu ayrı task
-düğümlerinden oluşan tam heterogeneous graph yerine bu şekilde gerçekleştiriyor.
-Makale çizimi ile resmi kod arasındaki bu fark explainer'da açık olmalı.
+`llm_routing/routers/graphrouter/{labels,gnn,router}.py` önerilir.
+
+**Açık karar: makale mi, resmi kod mu?** ICLR metni ile resmi kod (`0edfb87`) ağ ve
+eğitim ayarlarında birbirini tutmuyor:
+
+| konu | makale (§2.3, §3.4–3.5) | resmi kod / SU Lab portu |
+|---|---|---|
+| graph | task, query ve LLM düğümlü heterogeneous graph | ayrı task düğümü yok; task embedding'i query özelliğine eklenir |
+| GNN katmanı | iki katmanlı graph attention network (GAT) | FeatureAlign + iki `GeneralConv` (attention yok) |
+| gizli boyut | 32 | 16 (task 8 + query 8) |
+| optimizer / lr | Adam, lr `1e-3`'ten LambdaLR ile 0'a | AdamW, sabit lr `3e-4`, weight decay `1e-4` |
+| normalizasyon | performans ve maliyet ikisi de normalize edilir | maliyet task başına min-max; effect ham |
+
+AGENTS.md "makalenin yöntemini izle" diyor; ancak makaledeki sayılar resmi kodla
+üretilmiş olabilir ve makale metni GAT'ın tam ayarlarını vermiyor. Hangisinin ana
+varyant olacağı **ekip kararıdır** ve implementasyondan önce DECISIONS'a yazılmalı.
+Seçilmeyen taraf explainer'da belgelenmiş sapma olarak yer alır. Bu belgenin
+aşağıdaki ağ ve eğitim tarifi resmi koddan alınmıştır; bu bir öneri, karar değildir.
 
 ```text
 effect = sample-0 GT
@@ -180,7 +204,7 @@ sonra evaluator tarafından okunur.
 | Cost First | 0.2 | 0.8 |
 
 Her senaryoda kenar özellikleri `[reward, cost_norm, effect]`; hedef en yüksek reward
-modelinin kenarında 1. Resmi eğitim: BCE, 1000 optimizer adımı, adım başına 32 maskeleme
+modelinin kenarında 1. Resmi kodun eğitimi (makaleden farkı yukarıda): BCE, 1000 optimizer adımı, adım başına 32 maskeleme
 çekimi, maske oranı 0.5, AdamW lr `3e-4`, weight decay `1e-4`; checkpoint val macro-F1.
 Maske çekimleri sıradan 32-sorguluk minibatch değildir. Eşit reward'da model sırasına
 göre ilk modeli seçme davranışı özellikle GT'de raporlanmalı ve test edilmeli.
@@ -344,6 +368,7 @@ arayüzüdür ve bu incelemede çalıştırılmadı.** V2 release'i hazırken ö
 ```bash
 # Planlanan gerçek eğitim config'leri, üç seed (0, 1, 2):
 bash cluster/tosun/submit_train.sh configs/experiments/hybrid_llm_trans__shared_v2_gt.yaml 3
+bash cluster/tosun/submit_train.sh configs/experiments/hybrid_llm_prob__shared_v2_gt.yaml 3
 bash cluster/tosun/submit_train.sh configs/experiments/uniroute_kmeans__shared_v2_dynamic_gt.yaml 3
 bash cluster/tosun/submit_train.sh configs/experiments/uniroute_learned__shared_v2_dynamic_gt.yaml 3
 bash cluster/tosun/submit_train.sh configs/experiments/graphrouter_performance__shared_v2_gt.yaml 3
@@ -351,7 +376,8 @@ bash cluster/tosun/submit_train.sh configs/experiments/graphrouter_balance__shar
 bash cluster/tosun/submit_train.sh configs/experiments/graphrouter_cost__shared_v2_gt.yaml 3
 ```
 
-Bu altı config ilk ana seti oluşturur; Hybrid `det/prob`, aynı çiftte GraphRouter
+Bu yedi config ilk ana seti oluşturur (`r_prob`, §4'teki 0/1 GT indirgenmesi
+yüzünden `r_trans`'ın yanında); Hybrid `det`, aynı çiftte GraphRouter
 karşılaştırması, statik UniRoute ve diğer kalite kanalları ayrı ek deneylerdir.
 Çıktılar mevcut `runs/<benchmark>/<experiment>/...` düzeninde config, checkpoint,
 label/protokol manifesti, kalite–maliyet noktaları ve eğitim süresini içermeli.
