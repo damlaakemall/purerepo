@@ -28,6 +28,11 @@ henüz implemente edilmedi; bu tablo implementasyon iddiası değildir):
 
 Arxiv revision'ı ve resmi kod her makale için implementasyondan önce sabitlenmelidir.
 
+Hybrid LLM, GraphRouter ve UniRoute için makale/resmi kod incelemesi, referans repoda
+taşınmaması gereken davranışlar ve `shared_v2` eğitim önerisi:
+[üç router eğitim planı](uc_router_egitim_plani.md). Bu bir plan; yukarıdaki
+router'ların implementasyon veya eğitim durumunu değiştirmez.
+
 Model alt kümesi: bir router `fit` sonrası `evaluation_models()` döndürürse runner o
 router'ı, tek modelleri ve bütün baseline'ları yalnız o modeller üzerinde ölçer
 (UniRoute'un test LLM'leri). Varsayılan `None` = bütün aday modeller.

@@ -86,6 +86,9 @@ bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v1.yaml <member
 
 Router training on Tosun uses `bash cluster/tosun/submit_train.sh <experiment.yaml> <num_seeds>`. There are
 no `shared_v1` experiment configs yet; they come with the first paper router.
+The [Hybrid LLM, GraphRouter and UniRoute training plan (Türkçe)](docs/team/uc_router_egitim_plani.md)
+maps the papers and reference code to our data, with proposed `shared_v2` experiments and required
+evaluation fixes. These routers are still planned.
 
 ## The shared data (`shared_v1`)
 
