@@ -32,6 +32,7 @@ def build_table(records: list[dict]) -> str:
     from .collection.io import digest
 
     groups = defaultdict(lambda: defaultdict(list))  # data + pool + cohorts -> router -> results
+    cost_notes = {}
     for rec in records:
         pool = " vs ".join(rec["models"])
         if rec.get("training_models"):  # a dynamic-pool protocol is a different comparison
@@ -45,6 +46,9 @@ def build_table(records: list[dict]) -> str:
                 identity = digest(info["query_ids"])
             cohorts.append(identity or "unknown")
         key = (rec["benchmark"], rec["fingerprint"], pool, tuple(cohorts))
+        definition = rec.get("cost_definition") or {}
+        cost_notes[key] = ("Estimated API cost (USD), frozen tariff " + str(definition.get("snapshot_date", "unknown"))
+                           if definition.get("kind") == "estimated_api_usd" else rec.get("cost_unit") or "unspecified")
         for r in rec["results"]:
             label = r["router"] + (" (baseline)" if r.get("is_baseline") else "")
             # the same baseline is evaluated by every experiment on this data: count each seed once
@@ -54,6 +58,7 @@ def build_table(records: list[dict]) -> str:
     lines = []
     for (bench, fp, models, cohorts), routers in sorted(groups.items()):
         lines += [f"### {bench} — models: {models}", f"data fingerprint `{fp}`",
+                  "cost: " + cost_notes[bench, fp, models, cohorts],
                   "cohorts (train / val / test): " + " / ".join(f"`{c}`" for c in cohorts), "",
                   "| router | seeds | " + " | ".join(h for _, h in COLUMNS) + " |",
                   "|---|---|" + "---|" * len(COLUMNS)]

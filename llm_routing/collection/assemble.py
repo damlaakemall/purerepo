@@ -26,6 +26,12 @@ def release_spec(cfg):
 SAMPLE_EXTRAS = {"sample_cost": "cost", "completion_tokens": "completion_tokens", "seconds": "seconds"}
 
 
+def sample_columns(cfg):
+    # Opt in for new releases only; old frozen views keep their layout/fingerprint.
+    public = {"prompt_tokens": "prompt_tokens"} if "prompt_tokens" in cfg.get("input_features", []) else {}
+    return {**SAMPLE_EXTRAS, **public}
+
+
 def frozen_dir(cfg):
     version = cfg["version"]
     if not version or Path(version).name != version or version in (".", ".."):
@@ -209,14 +215,14 @@ def assemble(cfg):
     shape = len(rows), len(names), max_k
     arrays = {c: np.full(shape, np.nan, dtype=np.float32) for c in scores}
     costs = np.full(shape[:2], np.nan, dtype=np.float32)
-    per_sample = {name: np.full(shape, np.nan, dtype=np.float32) for name in SAMPLE_EXTRAS}
+    per_sample = {name: np.full(shape, np.nan, dtype=np.float32) for name in sample_columns(cfg)}
     qi, mi = {r["id"]: i for i, r in enumerate(rows)}, {m: j for j, m in enumerate(names)}
     for r in records:
         i, j, sid = qi[r["query_id"]], mi[r["model"]], r["sample_id"]
         for c in arrays:
             if r[c] is not None:
                 arrays[c][i, j, sid] = r[c]
-        for name, column in SAMPLE_EXTRAS.items():
+        for name, column in sample_columns(cfg).items():
             if r[column] is not None:
                 per_sample[name][i, j, sid] = r[column]
         if sid == 0 and r["cost"] is not None:
@@ -301,7 +307,7 @@ def validate_release(path):
                 raise ValueError("long/view quality mismatch")
             if s == 0 and not np.isclose(b.costs[i, j], r["cost"], equal_nan=True):
                 raise ValueError("long/view cost mismatch")
-            expected = {**SAMPLE_EXTRAS, **{c: c for c in quality if c != channel}}
+            expected = {**sample_columns(cfg), **{c: c for c in quality if c != channel}}
             for name, column in expected.items():
                 value = r.get(column)
                 if not np.isclose(b.extras[name][i, j, s], np.nan if value is None else value, equal_nan=True):
@@ -310,8 +316,8 @@ def validate_release(path):
 
 
 def model_info(models):
-    """name -> HF model ID, revision and cost proxy per 1k tokens (= parameters in billions)."""
-    keys = ("model_id", "revision", "cost_per_1k_tokens")
+    """Static model facts and frozen tariffs, independent of observed response quality."""
+    keys = ("model_id", "revision", "parameters_b", "pricing", "cost_per_1k_tokens")
     return {name: {k: spec[k] for k in keys if k in spec} for name, spec in models.items()}
 
 

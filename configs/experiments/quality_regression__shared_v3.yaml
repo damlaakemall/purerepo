@@ -1,0 +1,7 @@
+# Baseline on the real shared_v3 ground-truth view (needs the assembled release under $LLMR_DATA_ROOT).
+name: quality_regression
+seed: 0
+benchmark: configs/benchmarks/shared_v3.yaml
+router: configs/routers/quality_regression.yaml
+baselines: [oracle]
+wandb: {enabled: false, project: llm-routing}

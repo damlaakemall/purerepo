@@ -21,8 +21,8 @@ A **learning project** at Sabancı University. The team re-implements LLM routin
 | `llm_routing/legacy_pipeline/` | older single-user pipeline (`ours_v1`); not used for team data. Its `scorers.py` `bartscore` is the paper's reference-based variant, not the `shared_v1` channel |
 | `llm_routing/runner.py`, `cli.py` | the single train + evaluate procedure, and the `llmr` command |
 | `llm_routing/contract.py` | `llmr check-router`: the fairness checks every router must pass (test labels unused, dynamic-pool boundary, valid decisions) |
-| `configs/` | `benchmarks/` (`shared_v1.yaml`, `shared_v2.yaml` for the real data; `synthetic_shared.yaml` = CPU data of the same shape, for development), `model_pools/team.yaml` (12 models), `routers/`, `experiments/` |
-| `cluster/tosun/` | SLURM scripts for Tosun; start with its README. `team.yaml`: which of the 3 members collects which 4 models |
+| `configs/` | `benchmarks/` (`shared_v3.yaml` for the next collection; `synthetic_shared_v3.yaml` = CPU development data; v1/v2 kept), `model_pools/team_v3.yaml` (12 priced models), `routers/`, `experiments/` |
+| `cluster/tosun/` | SLURM scripts for Tosun; start with its README. `team_v3.yaml`: which of the 3 members collects which 4 models for v3 |
 | `docs/concepts/` | routing fundamentals, comparison, benchmarks, evaluation metrics (English) |
 | `docs/team/` | team workflow, `shared_v1` data protocol, router contract (Turkish) |
 | `docs/papers/` | paper explainer template (one explainer per paper) |
@@ -46,9 +46,9 @@ CI (`.github/workflows/`) runs the tests, both CPU training smokes, the router c
 the collection smoke. Real generation and scoring only run on Tosun GPUs:
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_pilot.yaml <member> 1    # 30-query pilot of a member's 4 models
-bash cluster/tosun/submit_member.sh configs/benchmarks/shared_pilot.yaml <model> <member> 1   # or one model
-python cluster/tosun/inspect_shard.py configs/benchmarks/shared_pilot.yaml <model> <member>    # check it before packaging
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v3_pilot.yaml <member> 1    # 30-query pilot of a member's 4 models
+bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v3_pilot.yaml <model> <member> 1   # or one model
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v3_pilot.yaml <model> <member>    # check it before packaging
 ```
 
 Setup, GPUs and known Tosun problems: [cluster/tosun/README.md](cluster/tosun/README.md) and [docs/walkthrough/01_egitim_verisi.md](docs/walkthrough/01_egitim_verisi.md).
@@ -56,10 +56,10 @@ Setup, GPUs and known Tosun problems: [cluster/tosun/README.md](cluster/tosun/RE
 ## Rules that must not be broken
 
 1. **Never touch the test split during training.** `fit` uses `train` (and `val` for tuning or thresholds). Test labels never choose a checkpoint or threshold.
-2. **Never change a benchmark that already has results.** Make a new version (`shared_v2.yaml`); the fingerprint check enforces this. Frozen releases are never overwritten.
+2. **Never change a benchmark that already has results.** Make a new version (as with `shared_v3.yaml`); the fingerprint check enforces this. Frozen releases are never overwritten.
 3. **No paid APIs.** All generation and scoring run on Tosun (vLLM, HF fallback).
 4. **Quality channels stay separate.** Ground truth, ArmoRM and BARTScore are separate views; never fill a missing GT with another score. Paper-specific labels are built inside the router package (`labels.py`), never written into the shared data.
-5. **Costs are a token proxy** (parameters × tokens), not USD. Don't report them as dollars.
+5. **Keep cost definitions explicit.** V1/v2 use a parameter token proxy, never USD. V3 uses frozen public input/output tariffs × local token counts: **estimated API USD**, not actual GPU expense or a provider bill. Never refresh prices during training; price changes require a new release. No paid inference APIs.
 6. Don't commit `data/`, `runs/`, `outputs/`, weights, parquet or jsonl (except test fixtures).
 
 ## When finishing a project step
@@ -90,8 +90,8 @@ For GraphRouter and UniRoute, the user has chosen the SU Lab reference implement
 2. Reuse, do not rewrite: `core/classifiers.py` (soft-label text classifier, val checkpoint), `core/embeddings.py`
    (frozen encoder, any model/pooling, cache), `core/labels.py` (`label_manifest` in `describe()`).
 3. What the data gives you: `bench.scores[N, M, k]` (one quality channel), `bench.costs[N, M]` (sample 0),
-   `bench.sources`, `bench.extras` (`sample_cost`, `completion_tokens`, `seconds`, other channels),
-   `bench.meta["model_info"]` (model ID, revision, cost proxy). Static knowledge the paper needs about models or
+   `bench.sources`, `bench.extras` (`sample_cost`, `completion_tokens`, `seconds`, other channels; v3 public `prompt_tokens`),
+   `bench.meta["model_info"]` (model ID, revision, parameters_b, frozen pricing; legacy cost proxy). Static knowledge the paper needs about models or
    tasks (e.g. GraphRouter's descriptions) goes in the router config, written from public model cards, never from
    results. A model subset (Hybrid's pair) is the router config's `models`. Train on some models and test on others
    (UniRoute): return them from `training_models()` and `evaluation_models()`; the runner enforces the boundary.
@@ -99,7 +99,7 @@ For GraphRouter and UniRoute, the user has chosen the SU Lab reference implement
    If the paper truly needs data the release lacks (another channel, more samples, other models), stop and ask:
    that is a new benchmark version (rule 2), not a change inside a router.
 4. Configs: `configs/routers/<paper>.yaml` (a fast CPU variant, named as such) and `<paper>_<encoder>.yaml` (the
-   paper's setup); experiments `configs/experiments/<paper>__synthetic_shared.yaml` and `<paper>__shared_v2.yaml`
+   paper's setup); experiments `configs/experiments/<paper>__synthetic_shared_v3.yaml` and `<paper>__shared_v3.yaml`
    (copy the `quality_regression__*` ones). Router configs name real team models, so they run on both.
 5. Tests in `tests/test_<paper>.py`: labels on a hand-computable example, the paper-specific leakage checks from the
    plan, and the router in `test_check_router` in `tests/test_router_infra.py`.
@@ -110,10 +110,10 @@ For GraphRouter and UniRoute, the user has chosen the SU Lab reference implement
 ```bash
 pytest -q
 llmr check-router configs/routers/<paper>.yaml
-llmr train configs/experiments/<paper>__synthetic_shared.yaml
+llmr train configs/experiments/<paper>__synthetic_shared_v3.yaml
 ```
 
-The real run waits for the shared release: `bash cluster/tosun/submit_train.sh configs/experiments/<paper>__shared_v2.yaml 3`.
+The real run waits for the shared release: `bash cluster/tosun/submit_train.sh configs/experiments/<paper>__shared_v3.yaml 3`.
 The shared infrastructure and its checked release-to-training example are documented in
 [the training walkthrough](docs/walkthrough/02_router_egitimi.md). Paper-specific decisions stay open;
 infrastructure readiness is not a claim that any of the three routers is implemented.

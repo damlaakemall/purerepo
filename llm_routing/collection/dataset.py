@@ -1,6 +1,7 @@
 """Build queries ONCE, before any member generates answers. Never silently overwrite."""
 from __future__ import annotations
 
+import math
 import re
 import tempfile
 from pathlib import Path
@@ -19,6 +20,13 @@ def model_pool(cfg):
         raise ValueError("invalid model name")
     if len({safe_name(n) for n in names}) != len(names):
         raise ValueError("model names collide after filename normalization")
+    if cfg.get("cost", {}).get("definition") == "usd_tokens":
+        for m in models:
+            price = m.get("pricing", {})
+            for key in ("input_per_1m", "output_per_1m"):
+                rate = price.get(key)
+                if type(rate) not in (float, int) or not math.isfinite(rate) or rate < 0:
+                    raise ValueError(f"{m['name']}: missing/invalid pricing.{key}")
     return {m["name"]: m for m in models}
 
 

@@ -13,7 +13,7 @@ them from the environment, e.g. `LLMR_GPU_TYPE=a100` to request a specific card.
 sinfo -p cuda -o "%20N %12G %8m %t"
 ```
 
-Model weights for the 12-model pool take ~300 GB: point `HF_HOME` at scratch if your home quota is small.
+Model weights for the 12-model pool take ~390 GB for v3 BF16 weights alone (allow extra cache/scorer space): point `HF_HOME` at scratch if your home quota is small.
 No paid APIs are used; everything runs on Tosun GPUs.
 
 ## 1. One-time: environment
@@ -29,12 +29,12 @@ wandb login                          # experiment tracking (optional)
 GPU jobs check `torch.cuda.is_available()` first (`llmr_require_gpu`): a torch built for a newer CUDA than the
 driver would otherwise run on CPU, ~750x slower, and die on the wall clock hours later. Tosun's driver is 570
 (CUDA 12.x), so `setup_env.sh` pins vLLM and torch builds for CUDA 12.9. Start with the 30-query pilot
-(`configs/benchmarks/shared_pilot.yaml`); the whole procedure, explained step by step with a real run, is in
+(`configs/benchmarks/shared_v3_pilot.yaml`); the whole procedure, explained step by step with a real run, is in
 [docs/walkthrough/01_egitim_verisi.md](../../docs/walkthrough/01_egitim_verisi.md) (Turkish).
 
 ## 2. Build a benchmark with the older single-user pipeline (`ours_v1` / `ours_dev`)
 
-> The main benchmark is now `shared_v1`, built by team members model by model: skip to [Independent shared-v1 member jobs](#independent-shared-v1-member-jobs). This section is kept for the earlier `ours_v1` draft and the quick `ours_dev` pipeline test. Check the open items in [DECISIONS.md](../../DECISIONS.md) first.
+> The next main benchmark is `shared_v3`, built by team members model by model: skip to [Independent shared-v1 member jobs](#independent-shared-v1-member-jobs). This section is kept for the earlier `ours_v1` draft and the quick `ours_dev` pipeline test. Check the open items in [DECISIONS.md](../../DECISIONS.md) first.
 
 ```bash
 bash cluster/tosun/submit_pipeline.sh configs/benchmarks/ours_v1.yaml --push
@@ -48,8 +48,8 @@ This runs `build-queries` on the login node, then for each model a **generate** 
 ## 3. Train routers
 
 ```bash
-bash cluster/tosun/submit_train.sh configs/experiments/<router>__shared_v1.yaml 3                 # 3 seeds
-bash cluster/tosun/submit_train.sh configs/experiments/<router>__shared_v1.yaml 3 seed=7 name=<variant>   # overrides
+bash cluster/tosun/submit_train.sh configs/experiments/<router>__shared_v3.yaml 3                 # 3 seeds
+bash cluster/tosun/submit_train.sh configs/experiments/<router>__shared_v3.yaml 3 seed=7 name=<variant>   # overrides
 ```
 
 Runs are written to `runs/` and to W&B. If compute nodes have no internet, set `WANDB_MODE=offline` and run `wandb sync` from the login node.
@@ -68,21 +68,23 @@ srun --partition=cuda --qos=cuda --gres=gpu:1 --mem=32G --time=01:00:00 --pty ba
 
 ## Independent shared-v1 member jobs
 
-For the prepared v2 collection use `configs/benchmarks/shared_v2_pilot.yaml` first, then
-`configs/benchmarks/shared_v2.yaml`. Its `collection_team` selects `team_v2.yaml`; the member names stay
-the same. Large models request one `rtx_pro_6000` GPU for generation only. A v2 GPU pilot has not yet
-validated memory or throughput; see the [walkthrough](../../docs/walkthrough/01_egitim_verisi.md#shared_v2-19-ekim-2026-hazırlığı).
+For the next collection use `configs/benchmarks/shared_v3_pilot.yaml`, then
+`configs/benchmarks/shared_v3.yaml`. `collection_team` selects `team_v3.yaml`: four priced models per
+member, with each 12B+ model requesting one `rtx_pro_6000` 96GB GPU. Generation is BF16 locally;
+OpenRouter tariffs only simulate estimated API USD. Accept the Llama/Gemma licenses assigned to you.
+Real v3 memory/context/reasoning pilots are pending; see the [walkthrough](../../docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
+V1/v2 configs and their collection assignments remain unchanged.
 
-We are three members with four models each; the assignment is in [`team.yaml`](team.yaml) and the team
+We are three members with four models each; the assignment is in [`team_v3.yaml`](team_v3.yaml) and the team
 procedure (who builds the dataset, who assembles) in the [team workflow](../../docs/team/team_workflow.md#0-üç-kişiyiz-kim-ne-yapar).
 After the dataset is frozen and shared, each member submits all their models with
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_pilot.yaml <member> 1   # pilot first
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v1.yaml <member> 4      # full run
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v3_pilot.yaml <member> 1   # pilot first
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v3.yaml <member> 4      # full run
 ```
 
-which calls `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` once per model (use that directly to resubmit one model). It requests the model's `gpus` (2 for the 24B, 27B and 32B models), then runs
+which calls `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` once per model (use that directly to resubmit one model). It requests the model's `gpus` (one 96GB card for v3 models with 12B+ parameters), then runs
 GT (CPU), ArmoRM (1 GPU) and BARTScore (1 GPU, if configured) scoring in parallel and packages the shard; it never submits router training.
 `LLMR_BATCH_SIZE` (default 256) is how many requests go to vLLM at once. The older `submit_pipeline.sh` continues
 to serve the original ours_v1/ours_dev configs. See [team workflow](../../docs/team/team_workflow.md).

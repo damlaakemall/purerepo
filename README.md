@@ -22,17 +22,18 @@ place where we deviate ([CONTRIBUTING.md → Keep it simple](CONTRIBUTING.md#kee
 
 ## Where we are now
 
-The next collection is prepared as **`shared_v2`**: all twelve models, including R1, are retained with
-an 8192-token output ceiling and `top_p: 1.0`; large models request one 96 GB RTX PRO 6000.
-The real v2 GPU pilot is still pending. Existing v1 configs and data stay intact.
-See [the collection walkthrough](docs/walkthrough/01_egitim_verisi.md#shared_v2-19-ekim-2026-hazırlığı).
+The next collection is **`shared_v3`**: 12 local open models with publicly verifiable, frozen
+OpenRouter provider tariffs. Six v2 models are retained and six are replaced. Costs are **estimated
+API USD**, computed from local input/output token counts, not a Tosun bill. Generation stays on Tosun,
+with 8192 output tokens and `top_p: 1.0`; real GPU pilots are pending. Existing v1/v2 configs and data
+stay intact. See [the pool, prices and procedure](docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
 
 | | status |
 |---|---|
-| Data collection pipeline (`shared_v1`) | ready and tested; the 30-query pilot on Tosun comes first |
+| Shared collection protocol | ready and CPU tested; v3 30-query GPU pilot is pending |
 | Routers | one baseline: *quality regression* (from RouterBench) |
 | Planned paper routers | Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT |
-| Open decisions | cost proxy, mixed quality scales, shared accounts, GPUs for the large models, token limit for the reasoning model ([DECISIONS.md](DECISIONS.md)) |
+| Open decisions | mixed quality scales, shared accounts, GPU pilots, Hybrid pair and UniRoute pool split ([DECISIONS.md](DECISIONS.md)) |
 
 | router | family | how it decides | code | explainer |
 |---|---|---|---|---|
@@ -61,7 +62,7 @@ pytest -q                                                            # all tests
 llmr smoke-pipeline --output /tmp/llmr-smoke                         # the whole data pipeline with fake models
 llmr routers                                                         # list the routers
 llmr train configs/experiments/quality_regression__synthetic.yaml    # train a router, seconds, no downloads
-llmr train configs/experiments/quality_regression__synthetic_shared.yaml   # same, on CPU data shaped like the shared release
+llmr train configs/experiments/quality_regression__synthetic_shared_v3.yaml   # same, on CPU data shaped like the shared release
 llmr check-router configs/routers/quality_regression.yaml           # fairness checks a new router must pass
 llmr train configs/experiments/quality_regression__routerbench.yaml  # same on real data (downloads RouterBench)
 llmr leaderboard                                                     # rebuild results/leaderboard.md
@@ -73,7 +74,7 @@ Any config value can be overridden on the command line, for example
 ## On the cluster (Tosun)
 
 Real generation and scoring only run on Tosun GPUs. We are three people, and each collects four of the
-12 models ([`cluster/tosun/team.yaml`](cluster/tosun/team.yaml)). İbrahim G is the coordinator, who builds and
+12 models ([`cluster/tosun/team_v3.yaml`](cluster/tosun/team_v3.yaml)). İbrahim G is the coordinator, who builds and
 shares the dataset once and assembles everyone's bundles at the end. The steps are in the
 [team guide (Türkçe)](docs/team/team_workflow.md#0-üç-kişiyiz-kim-ne-yapar).
 
@@ -81,29 +82,29 @@ Do the one-time setup in [cluster/tosun/README.md](cluster/tosun/README.md), the
 30-query pilot:
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_pilot.yaml <member> 1        # pilot, your 4 models
-python cluster/tosun/inspect_shard.py configs/benchmarks/shared_pilot.yaml <model> <member>   # check each one
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v1.yaml <member> 4           # full run
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v3_pilot.yaml <member> 1        # pilot, your 4 models
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v3_pilot.yaml <model> <member>   # check each one
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v3.yaml <member> 4           # full run
 ```
 
 Router training on Tosun uses `bash cluster/tosun/submit_train.sh <experiment.yaml> <num_seeds>`. The only
-shared-data experiments so far are the baseline's (`quality_regression__shared_v1.yaml`, `__shared_v2.yaml`);
+shared-data experiments so far are the baseline's (`quality_regression__shared_v1.yaml`, `__shared_v2.yaml`, `__shared_v3.yaml`);
 paper routers add theirs. The [Hybrid LLM, GraphRouter and UniRoute training plan (Türkçe)](docs/team/uc_router_egitim_plani.md)
-maps the papers and reference code to our data, with proposed `shared_v2` experiments. The shared evaluation
+maps the papers and reference code to our data, with proposed `shared_v3` experiments. The shared evaluation
 pieces they need are in place; the routers themselves are still planned ([how to add one](AGENTS.md#when-adding-a-router)).
 The [training walkthrough (Türkçe)](docs/walkthrough/02_router_egitimi.md) records the checked path from
 an assembled test-double release to training. The three paper implementations and real GPU runs are pending.
 
-## The shared data (`shared_v1`)
+## The shared data (`shared_v3`)
 
 - **Questions:** GSM8K, MMLU-Pro, BBH, OlympiadBench, MBPP, Alpaca, Multi-News
-  ([`configs/benchmarks/shared_v1.yaml`](configs/benchmarks/shared_v1.yaml)), split once into
+  ([`configs/benchmarks/shared_v3.yaml`](configs/benchmarks/shared_v3.yaml)), split once into
   train / val / test and frozen.
 - **Models:** 12 open-weight models from 3B to 33B, pinned to exact Hugging Face commits
-  ([`configs/model_pools/team.yaml`](configs/model_pools/team.yaml)). Each answers every question 10 times.
+  ([`configs/model_pools/team_v3.yaml`](configs/model_pools/team_v3.yaml)). Each answers every question 10 times.
 - **Quality**, scored three separate ways that are never mixed: ground truth (answer key, using the
   reference repo's audited evaluators), ArmoRM (a reward model) and BARTScore.
-- **Cost:** a token proxy (parameters × tokens), **not dollars**.
+- **Cost:** frozen input/output tariffs × measured token counts = **estimated API USD**. V1/v2 retain their parameter token proxy. Hosted precision/revisions can differ from local weights; this is a tariff simulation.
 - **No paid APIs.** Everything runs on Tosun.
 
 Each team member generates their share of the data, packages it as a checked bundle, and the bundles are
@@ -146,16 +147,16 @@ configs/experiments/*.yaml                                                      
 ## Rules that must not be broken
 
 1. Routers never see the **test split** while training. Thresholds and checkpoints are chosen on `val`.
-2. A benchmark that already has results is **never changed**. Make a new version (`shared_v2.yaml`) instead.
+2. A benchmark that already has results is **never changed**. Make a new version (as with `shared_v3.yaml`) instead.
 3. **No paid APIs.**
 4. The three quality scores **stay separate**. A missing ground truth is never filled with another score.
-5. Cost is a **token proxy**. Never report it as dollars.
+5. Keep cost definitions explicit: v1/v2 **token proxy** is never USD; v3 **estimated API USD** is never actual GPU spend or a provider bill.
 
 The full list, with the reasons, is in [AGENTS.md](AGENTS.md#rules-that-must-not-be-broken).
 
 ## Results so far
 
-Full table: [results/leaderboard.md](results/leaderboard.md). The paper routers will be trained on `shared_v1` next.
+Full table: [results/leaderboard.md](results/leaderboard.md). The paper routers will be trained on `shared_v3` next.
 
 ![](results/plots/quality_regression__routerbench.png)
 

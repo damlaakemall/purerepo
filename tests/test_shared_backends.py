@@ -89,3 +89,22 @@ def test_strip_think_matches_reference():
     assert answer_text("<think>\ncut off mid-thought, Answer: (D)", "strip_think") == ""  # truncated: no answer
     assert answer_text("<think>\n\n</think>\nplain", "strip_think") == "plain"           # SmolLM3 no-think
     assert answer_text("<think>x</think>y", "raw") == "<think>x</think>y"
+
+
+@pytest.mark.parametrize("multimodal", [False, True])
+def test_hf_loader_selects_checkpoint_class_and_removes_vllm_options(monkeypatch, multimodal):
+    calls = []
+    def loader(kind):
+        def load(model_id, **kwargs):
+            calls.append((kind, model_id, kwargs))
+            return SimpleNamespace(eval=lambda: "loaded")
+        return SimpleNamespace(from_pretrained=load)
+    monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(
+        AutoTokenizer=SimpleNamespace(from_pretrained=lambda *a, **kw: Tokenizer()),
+        AutoModelForCausalLM=loader("causal"), AutoModelForImageTextToText=loader("conditional")))
+    g = Generator({"model_id": "fake/model", "revision": "pinned",
+                   "hf_loader": "multimodal_lm" if multimodal else "causal_lm",
+                   "engine_kwargs": {"max_model_len": 16384}}, {"engine": "hf"})
+    g._load()
+    assert calls == [("conditional" if multimodal else "causal", "fake/model",
+                      {"revision": "pinned", "device_map": "auto"})]

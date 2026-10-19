@@ -8,6 +8,142 @@
 > **Durum (15 Ekim 2026):** akış hazır ve 30 soruluk bir pilotla gerçek GPU'da uçtan uca doğrulandı. Tam
 > koleksiyon (7652 soru × 12 model × 10 cevap) henüz yapılmadı.
 
+## shared_v3: fiyatı doğrulanabilen model havuzu
+
+**19 Ekim 2026 — yeni koleksiyonun hazırlığı.** Kullanıcının fiyatı bulunabilen
+modellerle çalışma isteğiyle ana sonraki sürüm v3 oldu. V1/v2 dosyaları ve sonuçları
+değiştirilmedi. Bu bölüm aşağıdaki tarihsel v1/v2 kayıtlarından önce okunmalı;
+v3 gerçek GPU pilotu ve tam koleksiyonu henüz yapılmadı.
+
+### Neyi değiştirdik, neden?
+
+Havuz yine 12 açık ağırlıklı model. Korunan altı: Llama3.2-3B, Qwen2.5-7B,
+Llama3.1-8B, Phi-4, Mistral Small 24B, Gemma3-27B. Çıkan altı: SmolLM3-3B,
+Phi-4-mini, Mistral7B-v0.3, OLMo3-7B, R1-Distill-Llama8B, Qwen2.5-32B.
+Yerlerine Gemma3-4B/12B, Mistral-Nemo12B, Qwen3-14B/32B ve Qwen2.5-Coder32B
+kondu: güncel OpenRouter kataloğunda açık HF kimliğiyle eşleşen ve pozitif fiyatlı
+sağlayıcısı doğrulanan modeller. Bu seçim yalnız kapasite/fiyat çeşitliliği sağlar;
+model kalitesi veya Pareto üstünlüğü iddiası değildir. Özellikle daha büyük modelin
+API fiyatının daha yüksek olması gerekmez.
+
+`configs/model_pools/team_v3.yaml` her modelin HF revision'ını, gerçek parametre
+sayısını (`parameters_b`, HF safetensors metadata'sından), BF16 yerel üretim ayarını ve
+ayrı `pricing` kaydını taşır. Parametre sayısı artık dolar tarifesi yerine kullanılmaz.
+Havuz referans SU Lab `e6578414` havuzundan yine ayrıdır. Yedi kaynak, formatter'lar,
+60/10/30 split, near-duplicate gruplama, üç ayrı skor kanalı ve k=10 örnek korunur.
+Ortak üretim T=0.7, top_p=1.0, en çok 8192 yeni token, toplam 16384 bağlamdır.
+Qwen3-14B'de thinking kapalı, Qwen3-32B'de açık; ikinci model düşünme çeşitliliğini
+korur. Düşünme token'ları çıktı maliyetine dahildir, puanlamadan önce izler temizlenir.
+
+### Donmuş fiyat tablosu
+
+**USD / 1 milyon token, 2026-10-19.** Bunlar model kataloğunun değişken “en düşük”
+fiyatından değil, belirli sağlayıcı endpoint'inin tarifesinden alınmıştır.
+
+| model | parametre (B) | sağlayıcı / hosted precision | input $/M | output $/M | kaynak |
+|---|---:|---|---:|---:|---|
+| `llama-3.2-3b` | 3.213 | Parasail / `bf16` | 0.05 | 0.33 | [tarife](https://openrouter.ai/api/v1/models/meta-llama/llama-3.2-3b-instruct/endpoints) |
+| `gemma-3-4b` | 4.300 | Parasail / `bf16` | 0.04 | 0.05 | [tarife](https://openrouter.ai/api/v1/models/google/gemma-3-4b-it/endpoints) |
+| `qwen2.5-7b` | 7.616 | Phala / `unknown` | 0.1 | 0.2 | [tarife](https://openrouter.ai/api/v1/models/qwen/qwen-2.5-7b-instruct/endpoints) |
+| `llama-3.1-8b` | 8.030 | DeepInfra / `fp8` | 0.02 | 0.04 | [tarife](https://openrouter.ai/api/v1/models/meta-llama/llama-3.1-8b-instruct/endpoints) |
+| `mistral-nemo-12b` | 12.248 | DekaLLM / `fp8` | 0.018 | 0.03 | [tarife](https://openrouter.ai/api/v1/models/mistralai/mistral-nemo/endpoints) |
+| `gemma-3-12b` | 12.187 | DeepInfra / `bf16` | 0.05 | 0.15 | [tarife](https://openrouter.ai/api/v1/models/google/gemma-3-12b-it/endpoints) |
+| `qwen3-14b` | 14.768 | NextBit / `int4` | 0.1 | 0.22 | [tarife](https://openrouter.ai/api/v1/models/qwen/qwen3-14b/endpoints) |
+| `phi-4` | 14.660 | DeepInfra / `bf16` | 0.07 | 0.14 | [tarife](https://openrouter.ai/api/v1/models/microsoft/phi-4/endpoints) |
+| `mistral-small-24b` | 23.572 | DeepInfra / `fp8` | 0.05 | 0.08 | [tarife](https://openrouter.ai/api/v1/models/mistralai/mistral-small-24b-instruct-2501/endpoints) |
+| `gemma-3-27b` | 27.432 | DeepInfra / `fp8` | 0.08 | 0.16 | [tarife](https://openrouter.ai/api/v1/models/google/gemma-3-27b-it/endpoints) |
+| `qwen2.5-coder-32b` | 32.764 | Cloudflare / `unknown` | 0.66 | 1 | [tarife](https://openrouter.ai/api/v1/models/qwen/qwen-2.5-coder-32b-instruct/endpoints) |
+| `qwen3-32b` | 32.762 | DeepInfra / `fp8` | 0.08 | 0.28 | [tarife](https://openrouter.ai/api/v1/models/qwen/qwen3-32b/endpoints) |
+
+Kaynakların herkese açık `GET /api/v1/models/{id}/endpoints` yanıtları ve HF metadata'sı
+okundu; inference çağrısı yapılmadı, ağırlık indirilmedi. OpenRouter ham `prompt` ve
+`completion` fiyatları **token başına** USD'dir; config'e bir milyonla çarpılarak yazıldı.
+[Resmî fiyat şeması](https://openrouter.ai/docs/guides/overview/models).
+
+Seçim: erişilebilir (`status=0`), normal service tier, pozitif iki tarife, en az
+16384 context ve 8192 max completion; ek request/internal-reasoning ücreti veya fiyat
+override'ı olmayan ve indirimli olmayan endpoint'ler arasından `input+output` toplamı
+en küçük olan (eşitlikte endpoint tag'i). Bu eşit input/output ağırlıklı sabit bir
+seçimdir; her cevap uzunluğu için “en ucuz sağlayıcı” iddiası değildir. Tarih,
+OpenRouter ID, katalogdaki HF ID, sağlayıcı, endpoint, quantization ve yayınlanmış
+context/prompt/completion sınırları config'tedir. Llama3.1'in katalogdaki `Meta-Llama`
+HF alias'ı canonical `Llama-3.1-8B-Instruct` reposuna çözülerek revision sabitlendi.
+
+Yerel BF16 çıktıyı bu tarifeyle fiyatlamak **tahmini API USD** hesabıdır. Hosted FP8,
+INT4 veya yayınlanmamış precision yerel BF16 ile aynı kalite ölçümü değildir; sağlayıcı
+HF revision'ını da garanti etmiyor. Phi-4 sağlayıcısında ayrıca 4096 input-token
+sınırı var: daha uzun yerel sorular için bu tarife yalnız karşıolgusal hesap olur,
+tüm benchmark'ın o endpoint'te çalışabileceği anlamına gelmez. Gerçek deployment
+iddiası için bu sorular ayrıca kapsam dışı raporlanmalı veya yeni sürümde sınırlandırılmalı.
+Cache/batch indirimleri, servis/ödeme ücretleri ve gerçek Tosun gideri hesaba katılmaz.
+Bu yüzden “gerçek API faturası” veya “Tosun'da dolar harcaması” diye sunulmaz.
+
+### Maliyet ve router bağlantısı
+
+```text
+realized_cost = (prompt_tokens * input_per_1m + completion_tokens * output_per_1m) / 1e6
+GraphRouter cost_hat = (prompt_tokens * input_per_1m
+                      + E_train[completion_tokens | model, source] * output_per_1m) / 1e6
+UniRoute: eğitim modellerinin maliyet profili train'den, yeni modellerinki val'den
+```
+
+Örnek: Llama3.2-3B için 1000 input + 2000 output token =
+`1000*0.05/1e6 + 2000*0.33/1e6 = $0.00071`.
+`collection/assemble.py` zaten iki tarifeli hesabı destekliyordu; yeni bir maliyet
+motoru eklenmedi. Eksik/geçersiz fiyatlar generation işinden önce reddedilir.
+Fiyatlar resolved release config hash'ine bağlanır; yüklerken değişmiş tarife kabul
+edilmez. Eğitim internete bağlanıp fiyat güncellemez; yeni fiyat yeni release ister.
+
+V3 view'ında `extras/prompt_tokens` modelin chat template/tokenizer'ından gelen,
+cevaptan **önce** bilinen girdidir. Eski v1/v2 view biçimi ve fingerprint'i değişmez.
+`meta.model_info` sabit parametre ve tarifeyi verir. `completion_tokens`, kalite ve
+gerçek sample maliyetleri testte seçim girdisi değildir. Contract kontrolü bu çıktı
+kanallarını karıştırır, public prompt uzunluğunu sabit tutar.
+
+GraphRouter/UniRoute'un SU Lab çekirdeği, native label/loss/karar kuralı ve makale–kod
+farkları [eğitim planında](../team/uc_router_egitim_plani.md) kalır. Bu adım üç router'ı
+implemente etmez; veri toplandıktan sonra bunları mevcut runner'a bağlayacak yapıyı
+hazırlar. GraphRouter'ın maliyet formülü referansla artık aynı input/output USD
+biçimindedir. Hybrid için yeni öneri Gemma3-4B/27B çifti; UniRoute 6/6 ayrımı ve
+Hybrid label seçenekleri test açılmadan ayrıca sabitlenecek.
+
+Gemma3'ün 4/12/27B checkpoint'i conditional model olduğundan HF fallback'te
+`hf_loader: multimodal_lm` ile uygun model sınıfı seçilir, text-only girdi kullanılır.
+`max_model_len` yalnız vLLM scheduler ayarıdır, HF model constructor'ına aktarılmaz.
+[Gemma model dokümanı](https://huggingface.co/docs/transformers/model_doc/gemma3).
+Gerçek model yükleme/bellek kontrolü CPU testinin kapsamı değildir.
+
+### Tosun'da uygulanacak prosedür
+
+Atama `cluster/tosun/team_v3.yaml`: İbrahim G 62.991B, Damla 63.911B, İbrahim B 66.650B;
+herkeste dört model. Bu toplamlar runtime ölçümü değildir. BF16 ağırlıklar toplam
+~387 GB; scorer ve cache için ek disk gerekir. Herkes kendi Llama/Gemma lisansını
+kabul eder. 12B ve üzeri generation için bir 96GB RTX PRO 6000 istenir; scorer'lar ayrı
+isteklerini korur. Pilot bellek/throughput sonucu alınmadan tam koleksiyon başlatılmaz.
+
+```bash
+# Koordinatör: bir kez build; çıktı bütün üyelerle byte-identical paylaşılır.
+# Login node yerine compute node'da kaynak indirme/gruplama:
+sbatch -p cuda --qos=cuda -c 4 --mem=16G -t 30 -o logs/build-v3-pilot-%j.out \
+  --wrap "source cluster/tosun/config.sh; llmr_activate; llmr build-queries configs/benchmarks/shared_v3_pilot.yaml"
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v3_pilot.yaml <member> 1
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v3_pilot.yaml <model> <member>
+# Pilot kontrolünden sonra full için yeni dataset build + her üyeden dört model:
+sbatch -p cuda --qos=cuda -c 4 --mem=16G -t 60 -o logs/build-v3-%j.out \
+  --wrap "source cluster/tosun/config.sh; llmr_activate; llmr build-queries configs/benchmarks/shared_v3.yaml"
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v3.yaml <member> 4
+# Bütün katkılar toplandıktan sonra koordinatör:
+llmr assemble configs/benchmarks/shared_v3.yaml
+llmr validate-data configs/benchmarks/shared_v3.yaml
+llmr evaluate-data configs/benchmarks/shared_v3.yaml
+bash cluster/tosun/submit_train.sh configs/experiments/quality_regression__shared_v3.yaml 3
+```
+
+**Bunlar v3 için henüz Tosun'da çalıştırılmadı.** Pilot özellikle Qwen3-32B düşünme
+kesilmesi, Multi-News/Phi-4 context sınırı, Gemma text template'i, EOS, tokenizer
+usage ve 12B+ bellek kullanımını denetler. Test split'i router ayarı seçmek için kullanılmaz.
+CPU kontrolleri ve gerçek sayıları [adım 2](02_router_egitimi.md#v3-fiyatlı-havuzun-cpu-kontrolü) kaydeder.
+
 ## Büyük resim
 
 Sonunda elde edeceğimiz şey kabaca şu (sayılar örnek):

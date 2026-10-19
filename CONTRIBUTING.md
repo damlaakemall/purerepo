@@ -24,14 +24,14 @@ This repo is for **learning** how routers work, so an implementation should read
    - Dynamic pool (train on some LLMs, test on others): return them from `training_models()` and `evaluation_models()`. The runner then gives `fit` only those models' train labels and fits the baselines on val.
 3. **Register the module** in `ROUTER_MODULES` in [`registry.py`](llm_routing/registry.py).
 4. **Config**: add `configs/routers/<paper>.yaml` (a fast CPU variant) and, if the paper uses a large encoder, `<paper>_<encoder>.yaml` with the paper's exact setup.
-5. **Experiments**: add `configs/experiments/<paper>__synthetic_shared.yaml` (CPU data shaped like the shared release, with the team's model names) and `<paper>__shared_v2.yaml` (the real data); copy the `quality_regression__*` configs. A public benchmark (MixInstruct, RouterBench) is optional.
+5. **Experiments**: add `configs/experiments/<paper>__synthetic_shared_v3.yaml` (CPU data shaped like the shared release, with the team's model names) and `<paper>__shared_v3.yaml` (the real data); copy the `quality_regression__*` configs. A public benchmark (MixInstruct, RouterBench) is optional.
 6. **Docs**: write `docs/papers/<paper>.md` using [`docs/papers/_template.md`](docs/papers/_template.md), and add a row to [docs/concepts/comparison.md](docs/concepts/comparison.md) and the README table.
-7. **Tests**: add the router config to `test_check_router` in `tests/test_router_infra.py`, plus unit tests for the paper-specific parts in `tests/test_<paper>.py`. Then run `llmr check-router configs/routers/<paper>.yaml`: it perturbs test scores, costs, every `extras` outcome channel and gold references; for a dynamic pool it also removes the new models' train scores/costs/extras. It checks that decisions stay unchanged and that `describe()` can be saved by the runner's JSON serializer. Return plain Python values there (e.g. NumPy arrays via `.tolist()`).
+7. **Tests**: add the router config to `test_check_router` in `tests/test_router_infra.py`, plus unit tests for the paper-specific parts in `tests/test_<paper>.py`. Then run `llmr check-router configs/routers/<paper>.yaml`: it perturbs test scores, costs, every `extras` outcome channel (public `prompt_tokens` stays fixed) and gold references; for a dynamic pool it also removes the new models' train scores/costs/extras. It checks that decisions stay unchanged and that `describe()` can be saved by the runner's JSON serializer. Return plain Python values there (e.g. NumPy arrays via `.tolist()`).
 
 ### Rules that keep the comparison fair
 
 - `fit` may only use the `train` split, plus `val` for tuning or early stopping. **Never read `test`.** `llmr check-router` checks the part of this that can be checked automatically.
-- At inference a router sees only query text, plus responses of models it has paid for if it's a cascade. Costs it needs are **estimated from train**.
+- At inference a router sees only query text, plus responses of models it has paid for if it's a cascade. Costs it needs are **estimated from train** (new-model profiles from val in a dynamic pool). Frozen tariffs and tokenized query length are public inputs; realized test output length/cost is an outcome.
 - Use the paper's hyperparameters when they're reported; otherwise tune on `val` only, and write down what you tuned in the explainer.
 - Report **≥ 3 seeds** for anything that goes into the leaderboard.
 

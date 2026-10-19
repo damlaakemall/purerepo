@@ -5,10 +5,12 @@ eklenir. Amaç LLM-Routing-Project'in ekipçe sürdürülen bir sürümünü gel
 `ours_v1`, `ours_dev`, MixInstruct, RouterBench ve synthetic YAML'ları korunur.
 Yeni ekip koleksiyonları `configs/benchmarks/shared_v1.yaml` ile başlar.
 
-V1 korunarak hazırlanan sonraki sürüm `configs/benchmarks/shared_v2.yaml`'dır (gerçek GPU pilotu bekliyor).
-Veri biçimi yine `protocol: shared-v1`; benchmark sürümü `v2` olması protokol adını değiştirmez.
-V2 model havuzu/ataması, token bütçesi ve Tosun kontrolü [adım 1 yazısında](../walkthrough/01_egitim_verisi.md#shared_v2-19-ekim-2026-hazırlığı)
-anlatılır. Aşağıdaki v1 model/4096-token ayarları eski verinin yeniden üretim kaydıdır.
+Sonraki koleksiyon `configs/benchmarks/shared_v3.yaml`, pilotu `shared_v3_pilot.yaml`.
+Model havuzu ve ekip ataması `team_v3.yaml` dosyalarıyla seçilir. Fiyatlar 19 Ekim 2026
+OpenRouter sağlayıcı tarifeleridir; generation yine yerel Tosun'da. V1/v2 değiştirilmez.
+Veri biçimi yine `protocol: shared-v1`; benchmark sürümü `v3` olması protokol adını değiştirmez.
+[Fiyatlar, seçim ve çalıştırma](../walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
+Aşağıdaki v1 model/4096-token ayarları eski verinin yeniden üretim kaydıdır.
 
 ## Veri akışı
 
@@ -210,8 +212,14 @@ LLM'nin r_prob'u) padding'i paydaya katmamalıdır. Makaleye özgü label'lar fr
 
 Cost tanımı sabittir: `token_proxy` = `cost_per_1k_tokens*(input+output)/1000`, burada
 `cost_per_1k_tokens` modelin parametre sayısıdır (milyar; havuzdaki bütün modeller dense). **USD diye raporlanmaz.**
-API kullanılmadığı için `usd_tokens` (input/output per-million fiyat) yalnız ileride
-gerekirse diye kodda durur. Tarihli snapshot, kaynak/note config'te tutulmalıdır.
+Bu tanım v1/v2 için korunur. **V3** `usd_tokens` kullanır:
+`input_tokens * input_per_1m / 1e6 + output_tokens * output_per_1m / 1e6`.
+Bu, yerel çıktının donmuş sağlayıcı tarifesiyle **tahmini API USD** maliyetidir; gerçek
+GPU gideri veya API faturası değildir. Kaynak URL, tarih, sağlayıcı, endpoint ve
+quantization havuzda saklanır; çözümlenmiş release config hash'ine girer. Eğitimde
+canlı fiyat çekilmez. Yeni tarife için yeni release gerekir.
+V3 `input_features: [prompt_tokens]` ile bu girdiyi view'a ekler; eski view'lar
+değişmez. Gerçek test `completion_tokens` ve toplam maliyet yalnız muhasebe içindir.
 Missing price ve usage hatadır; local GPU'ya sessizce sıfır fiyat atanmaz.
 Single-response evaluation sample 0'ın hem kalitesini hem maliyetini kullanır.
 Bütün sample maliyetleri long'da ve toplamları wide'da saklanır.

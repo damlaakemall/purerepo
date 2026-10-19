@@ -23,4 +23,4 @@ jobs:
         run: llmr check-router configs/routers/quality_regression.yaml
 
       - name: shared-shaped training smoke (CPU)
-        run: llmr train configs/experiments/quality_regression__synthetic_shared.yaml output_dir=/tmp/shared-runs benchmark.path=/tmp/shared-bench
+        run: llmr train configs/experiments/quality_regression__synthetic_shared_v3.yaml output_dir=/tmp/shared-runs benchmark.path=/tmp/shared-bench

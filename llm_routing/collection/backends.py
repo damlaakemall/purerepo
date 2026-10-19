@@ -48,8 +48,17 @@ class Generator:
             self.tok = self.llm.get_tokenizer()
         else:
             from transformers import AutoModelForCausalLM, AutoTokenizer
+            loader = AutoModelForCausalLM
+            if m.get("hf_loader", "causal_lm") == "multimodal_lm":
+                # Gemma 3 4/12/27B: conditional checkpoint, used with text only.
+                from transformers import AutoModelForImageTextToText
+                loader = AutoModelForImageTextToText
+            elif m.get("hf_loader", "causal_lm") != "causal_lm":
+                raise ValueError("hf_loader must be causal_lm or multimodal_lm")
+            # max_model_len is a vLLM scheduler option, not a transformers constructor argument.
+            engine_kwargs.pop("max_model_len", None)
             self.tok = AutoTokenizer.from_pretrained(self.model_id, revision=m.get("tokenizer_revision", m.get("revision")))
-            self.llm = AutoModelForCausalLM.from_pretrained(self.model_id, revision=m.get("revision"),
+            self.llm = loader.from_pretrained(self.model_id, revision=m.get("revision"),
                                                            device_map="auto", **engine_kwargs).eval()
         self.loaded = True
 

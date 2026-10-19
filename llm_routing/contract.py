@@ -2,7 +2,7 @@
 
 They turn the fairness rules (AGENTS.md, CONTRIBUTING.md) into something a person or a coding
 agent can run in seconds on CPU, on data shaped like the shared release
-(configs/benchmarks/synthetic_shared.yaml: the team's 12 model names, 7 sources, 0/1 and
+(configs/benchmarks/synthetic_shared_v3.yaml: the team's 12 model names, 7 sources, 0/1 and
 token-F1 scores, k=10 samples, a few missing cells):
 
 registered        the config builds a registered router
@@ -21,7 +21,7 @@ import json
 
 import numpy as np
 
-DEV_BENCHMARK = "configs/benchmarks/synthetic_shared.yaml"
+DEV_BENCHMARK = "configs/benchmarks/synthetic_shared_v3.yaml"
 
 
 def _decisions(router, test, num):
@@ -37,7 +37,9 @@ def _shuffle_outcomes(bench, seed):
     shuffled = bench.subset(np.arange(len(bench)))
     perm = np.random.default_rng(seed).permutation(len(bench))
     shuffled.scores, shuffled.costs = bench.scores[perm], bench.costs[perm]
-    shuffled.extras = {name: values[perm] for name, values in bench.extras.items()}
+    # Tokenized input length is observable before any answer exists (GraphRouter cost_exante).
+    shuffled.extras = {name: values if name == "prompt_tokens" else values[perm]
+                       for name, values in bench.extras.items()}
     if bench.references is not None:
         shuffled.references = [bench.references[i] for i in perm]
     return shuffled

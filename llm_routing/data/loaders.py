@@ -22,7 +22,25 @@ def prepare(cfg: dict) -> Benchmark:
         models = p.pop("models", None)
         if models:
             models = {k: tuple(v) for k, v in models.items()}
-        return make_synthetic_benchmark(models=models, name=cfg["name"], **p)
+        bench = make_synthetic_benchmark(models=models, name=cfg["name"], **p)
+        if cfg.get("models") and cfg.get("cost", {}).get("definition") == "usd_tokens":
+            import numpy as np
+            from ..collection.assemble import model_info
+            from ..collection.dataset import model_pool
+
+            pool = model_pool(cfg)
+            if list(pool) != bench.models:
+                raise ValueError("synthetic models must match the model_pool order")
+            # Invented token lengths, not downloads/tokenizer calls. Exercise the real cost formula.
+            prompt = np.broadcast_to(np.array([len(q.split()) for q in bench.queries])[:, None, None], bench.scores.shape).astype(np.float32)
+            completion = np.random.default_rng(p.get("seed", 0)).integers(8, 64, bench.scores.shape).astype(np.float32)
+            rates = np.array([[m["pricing"][k] for k in ("input_per_1m", "output_per_1m")] for m in pool.values()])
+            sample_cost = ((prompt * rates[None, :, 0, None] + completion * rates[None, :, 1, None]) / 1e6).astype(np.float32)
+            bench.costs = sample_cost[:, :, 0]
+            bench.extras.update(prompt_tokens=prompt, completion_tokens=completion, sample_cost=sample_cost)
+            bench.meta.update(model_info=model_info(pool), cost_unit="USD", cost_definition=cfg["cost"],
+                              token_counts="invented word counts and random output lengths; not HF tokenization")
+        return bench
     if kind == "mixinstruct":
         from .mixinstruct import load_mixinstruct
 

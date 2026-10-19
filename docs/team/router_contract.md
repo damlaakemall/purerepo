@@ -20,7 +20,7 @@ henüz implemente edilmedi; bu tablo implementasyon iddiası değildir):
 |---|---|---|---|---|
 | 1 | Hybrid LLM (2404.14618) | ICLR 2024 | `views/bartscore` (referans repo'nun BARTScore'u) veya `views/ground_truth`; `scores` (N, M, k=10) — r_prob/r_trans k sample ister | önceki implementasyon silindi, yeni veriyle baştan yazılacak; küçük/büyük çifti havuzdan seçilmeli, NaN padding paydaya girmemeli |
 | 3 | RouteLLM (2406.18665) | ICLR 2025 | sample-0 skorlarından her model çifti için battle | Elo/tier **yalnız train** battle'larından (referans repoda val/test sızıyor); GT judge |
-| 4 | GraphRouter (2410.03834) | ICLR 2025 | `sources` = task düğümü; maliyet (model, kaynak) başına train ortalaması | test kenarları görünmez; test sorguları çıkarımda düğüm olarak eklenir |
+| 4 | GraphRouter (2410.03834) | ICLR 2025 | `sources` = görev; `prompt_tokens` + train model/kaynak çıktı uzunluğu ve sabit input/output tarifesi | test kenarları görünmez; test sorguları çıkarımda düğüm olarak eklenir |
 | 5 | MixLLM | NAACL 2025 | `extras/seconds` (gecikme), `completion_tokens`, `sample_cost` | online/sürekli öğrenme için sabit bir sorgu akışı sırası seçilmeli |
 | 6 | UniRoute (2502.08773) | ICLR 2026 | bütün havuzun train/val skorları | dinamik havuz: test LLM'leri yalnız val'den görülür; `evaluation_models()` hook'u değerlendirmeyi o alt kümeye daraltır |
 | 7 | BEST-Route | ICML 2025 | `extras/armorm` (selector), `extras/sample_cost` (n sample'ın gerçek maliyeti), `sample_index` | best-of-n kalitesi selector'ın seçtiği sample'ın GT'si; `max(GT)` oracle'dır |
@@ -29,7 +29,7 @@ henüz implemente edilmedi; bu tablo implementasyon iddiası değildir):
 Arxiv revision'ı ve resmi kod her makale için implementasyondan önce sabitlenmelidir.
 
 Hybrid LLM, GraphRouter ve UniRoute için makale/resmi kod incelemesi, referans repoda
-taşınmaması gereken davranışlar ve `shared_v2` eğitim önerisi:
+taşınmaması gereken davranışlar ve `shared_v3` eğitim önerisi:
 [üç router eğitim planı](uc_router_egitim_plani.md). Bu bir plan; yukarıdaki
 router'ların implementasyon veya eğitim durumunu değiştirmez.
 
@@ -50,8 +50,9 @@ Dinamik havuzda val yoksa train'e geri dönülmez. Her split'in query ID'leri ve
 cohort hash'i kaydedilir; farklı cohort'lar leaderboard'da birleştirilmez.
 
 Modeller hakkında bilgi: `bench.meta["model_info"]` her modelin HF ID'sini, revision'ını
-ve maliyet proxy'sini (parametre, milyar) taşır; release'i değiştirmez, fingerprint'e
-girmez. Makalenin istediği başka sabit bilgi (GraphRouter'ın model/görev açıklamaları)
+ve `parameters_b` ile tarihli `pricing` tarifesini taşır (v1/v2: maliyet proxy'si).
+Fiyatlar release config hash'iyle bağlıdır; `cost_definition` ve maliyetler fingerprint'tedir.
+`model_info` yüklemede bu doğrulanmış config'ten eklenir. Makalenin istediği başka sabit bilgi (GraphRouter'ın model/görev açıklamaları)
 router config'inde durur ve kamuya açık model kartlarından yazılır.
 
 Tek operating point: `sweep` tek elemanlı liste döndürebilir (bir GraphRouter senaryosu).
@@ -60,8 +61,8 @@ O durumda AIQ boş kalır; kalite/maliyet noktası raporlanır.
 işaretçiyle gösterilir.
 
 Otomatik kontrol: `llmr check-router configs/routers/<paper>.yaml`, CPU geliştirme
-verisinde (`configs/benchmarks/synthetic_shared.yaml`: ekibin 12 model adı, 7 kaynak,
-0/1 ve token-F1 skorları, k=10) test skor/maliyetleri, bütün `extras` kanalları ve
+verisinde (`configs/benchmarks/synthetic_shared_v3.yaml`: ekibin 12 model adı, 7 kaynak,
+0/1 ve token-F1 skorları, k=10) test skor/maliyetleri, bütün `extras` çıktı kanalları (`prompt_tokens` sabit kalır) ve
 gold referansları karıştırılınca kararların değişmediğini sınar. Dinamik havuzda
 yeni modellerin train skor/maliyet/extras değerleri NaN yapılarak eksikliğin de
 eğitimi etkilemediği kontrol edilir. `describe()` runner ile aynı JSON yazıcısıyla

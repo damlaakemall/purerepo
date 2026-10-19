@@ -24,7 +24,14 @@ Every router is trained and tested on a **frozen `Benchmark`** ([`data/benchmark
 | `mixinstruct` | 12 open LLMs (2023) | 1 | BARTScore | parameter count (proxy) | 16k | Hybrid LLM's original setting |
 | `routerbench` | 11 incl. GPT-4, Claude, Mixtral | 1 | 0/1 correctness | real USD | 36k | multi-model routers, real prices |
 | `ours_v1` | Qwen2.5 0.5–7B, Llama-3.1-8B (draft) | 10 | BARTScore / exact match / MC accuracy per source | ∝ params × tokens | 10k (draft) | earlier draft, kept for existing runs |
-| `shared_v1` | 12 open-weight, 3B-33B (SmolLM3, Llama 3.x, Phi-4, Mistral, OLMo 3, Qwen2.5, R1-Distill-Llama, Gemma 3) | 10 | ground truth (0/1, token F1), ArmoRM and BARTScore, separate views | ∝ params × tokens | ~7.6k | **main comparison**: the team's version of SU Lab LLM-Routing-Project, built on Tosun ([protocol](../team/shared_protocol.md)) |
+| `shared_v1` | 12 open-weight, 3B-33B (SmolLM3, Llama 3.x, Phi-4, Mistral, OLMo 3, Qwen2.5, R1-Distill-Llama, Gemma 3) | 10 | ground truth (0/1, token F1), ArmoRM and BARTScore, separate views | ∝ params × tokens | ~7.6k | legacy comparison: the team's version of SU Lab LLM-Routing-Project, built on Tosun ([protocol](../team/shared_protocol.md)) |
+
+The next collection is `shared_v3`: 12 price-verifiable local models, the same sources/scorers/splits
+as v2, with separate input/output tariffs frozen on 2026-10-19. `cost = (prompt_tokens * input_per_1m +
+completion_tokens * output_per_1m) / 1e6`. This is **estimated API USD**, not a GPU expense or an API bill.
+Hosted revisions/precision can differ from our local BF16 weights. V1/v2 remain parameter token proxies.
+`synthetic_shared_v3` uses the same names/tariffs with invented scores and token counts, for CPU development.
+See the [collection write-up](../walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
 
 ## Building the earlier draft benchmark (`ours_v1`)
 

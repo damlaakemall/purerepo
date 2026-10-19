@@ -207,6 +207,7 @@ def run_experiment(cfg: dict) -> dict:
     singles = single_model_points(test)
     record = {"experiment": cfg["name"], "benchmark": bench.name, "fingerprint": fp, "seed": cfg["seed"],
               "quality_metric": bench.meta.get("metric"), "cost_unit": bench.meta.get("cost_unit"),
+              "cost_definition": bench.meta.get("cost_definition"),
               "coverage": coverage, "models": models, "training_models": train_models, "num_test": len(test), "num_train": len(train),
               "single_models": {k: {"cost": c, "quality": q} for k, (c, q) in singles.items()},
               "oracle_point": dict(zip(("cost", "quality"), oracle_point(test))), "results": results,
@@ -258,7 +259,8 @@ def plot_run(record: dict, curve_rows: list[dict], path: str):
     for m, v in record["single_models"].items():
         ax.scatter([v["cost"]], [v["quality"]], marker="o", s=28, zorder=3)
         ax.annotate(m, (v["cost"], v["quality"]), fontsize=7, xytext=(3, 3), textcoords="offset points")
-    ax.set_xlabel("mean cost per query")
+    estimated = (record.get("cost_definition") or {}).get("kind") == "estimated_api_usd"
+    ax.set_xlabel("mean estimated API cost per query (USD)" if estimated else "mean cost per query")
     ax.set_ylabel("mean quality (test)")
     ax.set_title(f"{record['experiment']} — {record['benchmark']}", fontsize=10)
     ax.legend(fontsize=8)

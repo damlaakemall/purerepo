@@ -41,7 +41,7 @@ def main(argv=None):
     lb.add_argument("--out", default="results/leaderboard.md")
     sub.add_parser("routers")
     cr = sub.add_parser("check-router"); cr.add_argument("config"); cr.add_argument("overrides", nargs="*")
-    cr.add_argument("--benchmark", default="configs/benchmarks/synthetic_shared.yaml")
+    cr.add_argument("--benchmark", default="configs/benchmarks/synthetic_shared_v3.yaml")
     smoke = sub.add_parser("smoke-pipeline")
     smoke.add_argument("--output", required=True)
     a, extras = p.parse_known_args(argv)

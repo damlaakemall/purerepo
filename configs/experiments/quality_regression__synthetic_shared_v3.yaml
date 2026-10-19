@@ -1,0 +1,7 @@
+# Example for new routers: the baseline on CPU data shaped like the shared release. Copy it for your paper.
+name: quality_regression
+seed: 0
+benchmark: configs/benchmarks/synthetic_shared_v3.yaml
+router: configs/routers/quality_regression.yaml
+baselines: [oracle]
+wandb: {enabled: false, project: llm-routing}

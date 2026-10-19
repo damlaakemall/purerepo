@@ -1,0 +1,78 @@
+# CPU-only: invented qualities and token lengths, NOT measured model performance.
+# Third tuple entry is ignored when the priced model_pool is supplied.
+name: synthetic_shared_v3
+loader: synthetic
+path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/synthetic_shared_v3
+params:
+  n: 3000
+  k: 10
+  seed: 0
+  noise: 0.35
+  missing_rate: 0.005
+  splits:
+    train: 0.6
+    val: 0.1
+    test: 0.3
+  sources:
+    gsm8k: binary
+    mmlu_pro: binary
+    bbh: binary
+    olympiadbench: binary
+    mbpp: binary
+    alpaca: continuous
+    multi_news: continuous
+  models:
+    llama-3.2-3b:
+    - 2.4
+    - 0.1
+    - 1.0
+    gemma-3-4b:
+    - 2.25
+    - 0.1
+    - 1.0
+    qwen2.5-7b:
+    - 2.1
+    - 0.1
+    - 1.0
+    llama-3.1-8b:
+    - 1.95
+    - 0.1
+    - 1.0
+    mistral-nemo-12b:
+    - 1.8
+    - 0.1
+    - 1.0
+    gemma-3-12b:
+    - 1.65
+    - 0.1
+    - 1.0
+    qwen3-14b:
+    - 1.5
+    - 0.1
+    - 1.0
+    phi-4:
+    - 1.35
+    - 0.1
+    - 1.0
+    mistral-small-24b:
+    - 1.2
+    - 0.1
+    - 1.0
+    gemma-3-27b:
+    - 1.05
+    - 0.1
+    - 1.0
+    qwen2.5-coder-32b:
+    - 0.9
+    - 0.1
+    - 1.0
+    qwen3-32b:
+    - 0.75
+    - 0.1
+    - 1.0
+model_pool: configs/model_pools/team_v3.yaml
+cost:
+  definition: usd_tokens
+  kind: estimated_api_usd
+  snapshot_date: '2026-10-19'
+  note: Invented token counts and qualities, frozen real tariffs; CPU mechanics only.

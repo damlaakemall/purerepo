@@ -46,6 +46,7 @@ def evaluate_data(cfg):
         reports[metric] = {"status": "ok", "n_test": len(all_rows), "n_scored": len(bench),
                            "query_ids": bench.query_ids, "cohort_hash": digest(bench.query_ids),
                            "fingerprint": bench.fingerprint(), "models": bench.models, "cost_unit": bench.meta["cost_unit"],
+                           "cost_definition": bench.meta.get("cost_definition"),
                            "single_models": {m: {"cost": c, "quality": q} for m, (c, q) in singles.items()},
                            "best_single_hindsight": best, "cheapest_single": cheapest,
                            "random": dict(zip(("cost", "quality"), curve([random], bench)[0].tolist())),
@@ -72,7 +73,8 @@ def evaluate_data(cfg):
             for label in sorted({r["strategy"] for r in curve_rows if r["metric"] == metric}):
                 pts = sorted((r["cost"], r["quality"]) for r in curve_rows if r["metric"] == metric and r["strategy"] == label)
                 ax.plot(*zip(*pts), marker=".", label=label)
-            ax.set(title=metric, xlabel="mean cost / query", ylabel="mean quality")
+            estimated = cfg.get("cost", {}).get("kind") == "estimated_api_usd"
+            ax.set(title=metric, xlabel="estimated API USD / query" if estimated else "mean cost / query", ylabel="mean quality")
             if ax.lines:
                 ax.legend(fontsize=7)
         fig.tight_layout()

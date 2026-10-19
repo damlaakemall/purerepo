@@ -54,7 +54,7 @@ Etiket üretiminde val/test sınırlarının doğruluğu ayrıca yöntemin testl
 ## 3. Kontrolün kapsamı
 
 `llmr check-router` query ve source'u sabit tutup test skorlarını, maliyetlerini,
-`extras` kanallarını ve gold referanslarını karıştırır. Karar değişirse sonuçlardan
+`extras` çıktı kanallarını (`prompt_tokens` sabit kalır) ve gold referanslarını karıştırır. Karar değişirse sonuçlardan
 yararlanılmış olabilir. Dinamik havuzda yeni modellerin train skor/maliyet/extras
 hücreleri NaN yapılır; bu değişiklik eğitim cohort'unu veya kararları etkilememeli.
 `describe()` aynı JSON yazıcısıyla denetlenir; kaydedilemeyen NumPy dizisi kontrolü geçmez.
@@ -106,6 +106,40 @@ Bu sayılar sentetik altyapı kontrolüdür; gerçek model başarısı değildir
 release oluşturulduktan sonra üretim/puanlama fonksiyonları kapatılarak eğitimin
 yalnız release okuduğu da doğrulanıyor. CI, testlere ek olarak contract kontrolünü,
 iki CPU eğitim smoke'unu ve koleksiyon smoke'unu çalıştırır.
+
+## V3 fiyatlı havuzun CPU kontrolü
+
+Bu adımın devamında yeni koleksiyon `shared_v3` olarak hazırlandı. [Havuz ve fiyatlar](01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu)
+ayrı ayrı pinli; `synthetic_shared_v3` aynı 12 adı ve tarifeyi taşır, skorları/token
+uzunlukları tamamen uydurmadır. Varsayılan `check-router` ve CI geliştirme eğitimi
+artık bu config'i kullanır. Önceki bölümdeki 97-test kaydı önceki hazırlığa aittir.
+
+19 Ekim 2026, yerel CPU'da gerçekten çalıştırılan komutlar:
+
+```bash
+.venv/bin/pytest -q
+.venv/bin/llmr check-router configs/routers/quality_regression.yaml
+.venv/bin/llmr train configs/experiments/quality_regression__synthetic_shared_v3.yaml output_dir=/tmp/llmr-v3-readiness-20261019-verified/runs benchmark.path=/tmp/llmr-v3-readiness-20261019-verified/bench
+.venv/bin/llmr smoke-pipeline --output /tmp/llmr-v3-readiness-20261019-verified/collection
+```
+
+| kontrol | gözlenen sonuç |
+|---|---|
+| testler | 110 geçti; 11.32 saniye |
+| contract | kayıt, geçerli kararlar, test çıktılarından bağımsızlık, JSON: hepsi geçti |
+| v3 sentetik veri | 3000 soru, 12 model, k=10; fingerprint `129c3868120a7516`, kaydet–yükle korundu |
+| v3 CPU eğitim | 1684 train / 278 val; 900 test sorusunun 859'u complete-case |
+| eğitim artifact'leri | `metrics.json`, `curve.csv`, `curve.png`; tahmini API USD etiketi ve `cost_definition` |
+| koleksiyon smoke | 30 soru, 2 model, 120 test-double cevap, immutable release doğrulandı |
+| USD release regresyonu | 30 soru × 2 fiyatlı model × 2 sample = 120 yanıt; assemble → validate → load → evaluate → baseline train geçti |
+| muhasebe | 1000 input + 2000 output için Llama3.2-3B `$0.00071`; tarife değişmiş config ile release yükleme reddedildi |
+
+Yeni testler ayrıca eksik/negatif/NaN/sonsuz fiyatın generation'dan önce reddini,
+yeni havuzun 6 modeli revision'larıyla korumasını, kaynak/split/scoring protokolünün
+korunmasını, public prompt uzunluğu ile gizli completion ayrımını ve HF conditional
+model sınıfını test double ile kontrol eder. Gerçek ağırlık/tokenizer indirilmedi.
+Sentetik başarı skorları model/router başarımı diye raporlanmaz; gerçek v3 GPU
+pilotundan sonra toplanan veriyle üç router'ın implementasyon/eğitimi yapılacak.
 
 ## Sırada ne var?
 

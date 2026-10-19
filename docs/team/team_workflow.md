@@ -3,10 +3,15 @@
 Çalışma reposu `damlaakemall/purerepo`; hedef SU Lab LLM-Routing-Project'in ekip için
 ayrı sürümü. Başlangıç: [teknik protokol](shared_protocol.md).
 
-**19 Ekim 2026:** aşağıdaki v1 akışı korunur. Sonraki toplama için `shared_v2.yaml` ve
-`shared_v2_pilot.yaml` hazırlandı: R1 dahil aynı 12 model, ortak 8192 çıktı token'ı ve top_p=1.0.
-V2 config'lerindeki `collection_team` alanı `cluster/tosun/team_v2.yaml` atamasını seçer; üyeler değişmez.
-V2'nin gerçek GPU pilotu bekliyor. [Gerekçe ve canlı Tosun kontrolü](../walkthrough/01_egitim_verisi.md#shared_v2-19-ekim-2026-hazırlığı).
+**19 Ekim 2026 — yeni koleksiyon:** `shared_v3.yaml` ve `shared_v3_pilot.yaml`,
+fiyatı doğrulanabilen 12 model ve tarihli API USD tarifeleriyle hazırlanır. Generation
+Tosun'da, ücretli API çağrısı yoktur. V1/v2 korunur. Ortak çıktı sınırı 8192, top_p=1.0;
+yeni gerçek GPU pilotu bekliyor. [Havuz, fiyatlar ve v3 komutları](../walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
+Atama `cluster/tosun/team_v3.yaml`: İbrahim G (Qwen3-32B/14B, Nemo-12B, Llama3.2-3B),
+Damla (Qwen2.5-Coder-32B, Phi-4, Gemma3-12B/4B), İbrahim B (Gemma3-27B,
+Mistral-Small-24B, Llama3.1-8B, Qwen2.5-7B). Herkes kendi gated modellerinin lisansını kabul eder.
+
+**Aşağıdaki v1 ataması ve komutları geçmiş verinin kaydıdır; v3 için yukarıdaki bölümü izleyin.**
 
 ## 0. Üç kişiyiz: kim ne yapar
 

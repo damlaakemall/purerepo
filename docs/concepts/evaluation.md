@@ -27,3 +27,13 @@ Together these points form the router's **quality–cost curve**, which is plott
 ## Reporting
 
 Report mean ± std over **≥ 3 seeds**. Seeds change the router's initialization and training order; the data stays the same. Never compare numbers with different data fingerprints.
+
+## Cost units across versions
+
+V1/v2 use a parameter token proxy (never dollars). V3 reports **estimated API USD**:
+local input/output token counts × frozen public provider tariffs, with `cost_definition`
+in every run and report. It measures a counterfactual API tariff, not actual Tosun spend
+or hosted model performance. Price snapshots and dataset versions cannot mix in one comparison.
+Public query token counts and frozen tariffs can inform a decision; realized test completion
+length/cost is only read after choosing the model. New-model cost profiles in a dynamic
+pool come from val, never those models' train labels.

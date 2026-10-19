@@ -1,0 +1,13 @@
+# Four models each; parameter sums balance weight storage, not measured runtime.
+# Every collector must accept the licenses of their Llama/Gemma models.
+members:
+  - name: İbrahim G
+    member: ibrahimg
+    coordinator: true
+    models: [qwen3-32b, qwen3-14b, mistral-nemo-12b, llama-3.2-3b]
+  - name: Damla
+    member: damla
+    models: [qwen2.5-coder-32b, phi-4, gemma-3-12b, gemma-3-4b]
+  - name: İbrahim B
+    member: ibrahimb
+    models: [gemma-3-27b, mistral-small-24b, llama-3.1-8b, qwen2.5-7b]

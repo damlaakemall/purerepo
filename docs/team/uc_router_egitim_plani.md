@@ -13,9 +13,9 @@ Topladığımız cevaplar ve skorlar router'a hangi soruda hangi modelin uygun o
 öğretiyor. Üç yöntem için de yeni cevap üretmek gerekmiyor: tamamlanmış ve doğrulanmış
 bir ortak release yeterli. Ek iş; makaleye özgü label, embedding ve eğitimdir.
 
-Yeni ana deneyler için öneri **`shared_v2`**. README ve DECISIONS'a göre v2 hazırlanmış,
+Kullanıcının fiyatı doğrulanabilen havuz isteğiyle yeni ana deneyler **`shared_v3`** üzerinde hazırlanır. Yeni havuzun tarifeleri 19 Ekim 2026 tarihinde donduruldu;
 gerçek GPU pilotu ve tam koleksiyonu bekliyor. Yerel `data/benchmarks` altında incelenen
-manifestler sentetik/smoke verisine ait; burada tamamlanmış gerçek v2 release veya bu
+manifestler sentetik/smoke verisine ait; burada tamamlanmış gerçek v3 release veya bu
 üç router'ın kendi havuzumuzdaki sonuçları bulunmadı. Tosun'daki güncel veri durumu bu
 incelemede doğrulanmadı. Mevcut v1 verisiyle de ayrı deney yapılabilir; sürümler birleşmez.
 
@@ -83,7 +83,7 @@ tasarlamak yerine çekirdeği koruyup `Benchmark` ve mevcut runner'a bağlayaca�
 | `uniroute/router.py`: `select_k`, `train`, `predict` | hard-map val alanıyla K seçimi; öğrenim modellerinin train profili; yeni modellerin val profili |
 | `uniroute/embedding.py` | BGE-base-en-v1.5, CLS pooling, L2 normalizasyonu, 512-token sınırı |
 
-Yalnız ortak veriye bağlantı, USD yerine token proxy, donmuş split/model sırası,
+Yalnız ortak veriye bağlantı, sabit API fiyatlarının kaynak kaydı, donmuş split/model sırası,
 eksik skorları yanlış cevap saymama ve bilgi sızıntısı düzeltmeleri uyarlanır.
 Referanstaki dosya yazma/okuma, ayrı CLI ve W&B katmanları tekrar taşınmaz; bunlar
 bizde zaten var. Mevcut embedding yardımcısı yukarıdaki ayarlar açıkça verilerek
@@ -97,7 +97,8 @@ Mevcut `Benchmark` yeterli temel alanlara sahip:
 - `queries`, `query_ids`, `split_of`, `sources`;
 - `scores[N, M, k]`: seçilmiş **tek** kalite kanalı;
 - `costs[N, M]`: sample-0 gerçekleşmiş maliyeti;
-- `extras/sample_cost`, `completion_tokens` ve diğer kalite kanalları.
+- `extras/sample_cost`, `completion_tokens` ve diğer kalite kanalları;
+- v3 `extras/prompt_tokens`: önceden bilinen girdi uzunluğu; `meta.model_info.pricing`: sabit input/output USD tarifesi.
 
 Ana adil karşılaştırma önerisi: üçünü de `ground_truth` görünümünde eğitip aynı
 görünümün **sample 0** skoruyla değerlendirmek. Bu, Hybrid'in orijinal BARTScore
@@ -158,7 +159,7 @@ seçimi makale tarifidir. CPU TF-IDF varyantı yalnız entegrasyon kontrolü ola
 ayrı isimle bulunmalı. `core/classifiers.py` yeniden kullanılır:
 `TransformerClassifier.fit(texts, y, val_texts, val_labels)` val BCE'si en düşük epoch'u tutar.
 
-Başlangıç çifti önerisi `qwen2.5-7b` / `qwen2.5-32b`: aynı aile, farklı ölçek.
+Başlangıç çifti önerisi `gemma-3-4b` / `gemma-3-27b`: aynı aile, farklı ölçek.
 Bu bir sonuç iddiası değil. Train kalite ve maliyetleriyle çiftin anlamlı olduğu
 kontrol edilir; değişiklik gerekirse test açılmadan sabitlenir. Diğer router'ların
 aynı çiftteki karşılaştırma koşuları da bu seçimi kullanır.
@@ -173,14 +174,14 @@ kalibre edilmiş bir dağıtım eşiği de değildir. `binary_metrics()` test e�
 Dağıtım eşiği runner'da hazır: `BinaryRouter` için eşik val'de (en çok küçük model payı,
 kalite kaybı ≤ %1, Ek A) seçilir ve test'e bir kez uygulanır (`test@val_threshold_*`).
 
-Rapor: küçük model trafik payı, all-large'a göre kalite farkı ve gerçek token-proxy
+Rapor: küçük model trafik payı, all-large'a göre kalite farkı ve yerel token sayılarıyla tahmini API USD
 maliyeti. Küçük modele %40 trafik göndermek, token maliyetinde %40 tasarruf anlamına
 gelmez. BARTScore gibi negatif ölçeklerde göreli yüzde kaybı yanında mutlak fark;
 all-large GT sıfırsa göreli kayıp için tanımsız değer raporlanmalı.
 
 ### BARTScore ayrımı
 
-Bizim `shared_v1/v2` kanalı SU Lab tanımıdır: `facebook/bart-large` altında
+Bizim `shared_v1/v2/v3` kanalı SU Lab tanımıdır: `facebook/bart-large` altında
 `sum log p(response | prompt)`. Referans cevap kullanmaz, uzunluğa duyarlıdır ve
 512-token kesimi vardır. Hybrid'in MixInstruct referanslı BARTScore deneyinin birebir
 tekrarı sayılamaz. İlk ana eğitim GT'de; mevcut BARTScore'da ek deney yapılırsa adı
@@ -210,17 +211,17 @@ resmi kodu izlemek makaledeki her ayrıntıyla birebir eşleştiğimiz anlamına
 
 ```text
 effect = sample-0 GT
-cost_hat(query, model) = B_model / 1000 * (prompt_tokens + E_train[completion_tokens | model, source])
+cost_hat(query, model) = (input_per_1m * prompt_tokens + output_per_1m * E_train[completion_tokens | model, source]) / 1e6
 cost_norm = train'den öğrenilmiş, kaynak başına min-max(cost_hat)
 reward = alpha * effect - beta * cost_norm
 label = one_hot(argmax_model reward)
 ```
 
-Bu, referansın `common/cost.py::cost_exante` hesabının token-proxy karşılığıdır:
+Bu, referansın `common/cost.py::cost_exante` hesabıyla aynı input/output tarife formülüdür:
 prompt uzunluğu bilinir, cevap uzunluğu model/kaynak başına train'den tahmin edilir.
 Önceki model/kaynak başına tamamen sabit maliyet önerisi ana tariften çıkarıldı.
-Prompt token sayıları canonical `long.parquet` içinde zaten saklanıyor; gerekli
-okuma bağlantısı router adapter'ında yapılır. Bunlar girdinin token sayılarıdır;
+Prompt token sayıları canonical `long.parquet` ve v3 `extras/prompt_tokens` içinde
+modelin kendi chat-template/tokenizer hesabıyla saklanır; adapter bunu doğrudan okur. Bunlar girdinin token sayılarıdır;
 gerçek test completion token'ı veya bundan hesaplanan toplam maliyet karar girdisi
 olmaz. Normalizasyon sınırları train'den öğrenilir; sıfır aralık açıkça ele alınır.
 Gerçek test maliyetini yalnız seçimden sonra evaluator okur.
@@ -352,12 +353,12 @@ Ortak kısımlar 19 Ekim 2026'da eklendi ("hazır" satırları). Kalanlar router
 | `runner.py` | `BinaryRouter` için val'de seçilip test'e bir kez uygulanan eşik (`test@val_threshold_*`) | hazır |
 | `core/evaluation.py` | tek operating point'te AIQ boş (`None`); kalite/maliyet noktası raporlanır | hazır |
 | `leaderboard.py` | eğitim havuzu veya train/val/test cohort'u farklı koşular ayrı grupta; val eşiği ve maliyet sütunları | hazır |
-| `collection/assemble.py` | `meta["model_info"]`: model ID, revision, parametre/maliyet (GraphRouter model açıklamaları için) | hazır |
+| `collection/assemble.py` | `meta["model_info"]`: model ID, revision, parametre ve sabit input/output tarifesi; v3 `extras/prompt_tokens` (GraphRouter maliyet tahmini için) | hazır |
 | `core/embeddings.py`, `core/labels.py` | dondurulmuş encoder ile embedding (+cache); label manifesti | hazır |
 | `llmr check-router` | test etiketi/maliyeti, dinamik havuz ve `describe()` kontrolü, CPU'da saniyeler | hazır |
 | `registry.py` | üç paketi kaydet; ağır bağımlılıkları yalnız ilgili router'da yükle | router ile |
 | kaynak bazında/macro sonuç, paper-native ölçütler (GraphRouter reward, UniRoute QNC/Area) | router paketinde veya runner'a küçük ek | router ile |
-| `configs/routers/`, `configs/experiments/` | CPU varyantı ile makale config'i ayrı; `synthetic_shared` ve `shared_v2` deneyleri | router ile |
+| `configs/routers/`, `configs/experiments/` | CPU varyantı ile makale config'i ayrı; `synthetic_shared_v3` ve `shared_v3` deneyleri | router ile |
 | `docs/papers/`, `docs/walkthrough/` | explainer; eğitim bitince tek Türkçe yazı | router ile |
 
 Genel `fit(train, val)` ve `Decision` sözleşmesi korunur. Test gerçek maliyetiyle
@@ -368,11 +369,11 @@ UniRoute QNC/Area. Genel AIQ'nun UniRoute Area ile aynı olduğu varsayılmaz.
 
 ## 8. Uygulama sırası ve eğitimden önce geçmesi gereken kontroller
 
-1. **Release:** v2 GPU pilotu, tam koleksiyon, bundle kontrolleri, immutable assembly.
-   Ana deney metric/cost raporlama tercihlerini DECISIONS'a geçir. Bu belge cost proxy
-   ve mixed-quality açık kararlarını kendiliğinden kapatmıyor.
+1. **Release:** v3 GPU pilotu, tam koleksiyon, bundle kontrolleri, immutable assembly.
+   V3 maliyet ekseni tarihli tarifelerle tahmini API USD olarak sabit.
+   Mixed-quality raporlama kararı hâlâ açık; model fiyatı kalite sırası varsayımı değildir.
 2. **Hybrid LLM:** üç label varyantı + CPU smoke; ardından DeBERTa eğitim/val seçimi.
-   Eşik raporunu doğrula. Qwen çiftini test açılmadan sabitle.
+   Eşik raporunu doğrula. Gemma çiftini test açılmadan sabitle.
 3. **UniRoute K-means:** dinamik model protokolünü ve baseline sınırlarını tamamla;
    sonra LearnedMap. Böylece graph'a geçmeden cohort/protokol raporu hazır olur.
 4. **GraphRouter:** referanstaki ağla üç senaryoyu uygula; kaynak açıklamaları,
@@ -405,18 +406,18 @@ daha ağırdır. GPU belleği ve süre için pilot ölçümü olmadan sayı vaat
 Hybrid için batch/sequence pilotu ve gerekirse uygun GPU override'ı yapılmalı.
 
 **Aşağıdaki router config'leri henüz yok; komutlar implementasyon sonrasının hedef
-arayüzüdür ve bu incelemede çalıştırılmadı.** V2 release'i hazırken önce mevcut
-`llmr validate-data configs/benchmarks/shared_v2.yaml` kontrolü geçmeli.
+arayüzüdür ve bu incelemede çalıştırılmadı.** V3 release'i hazırken önce mevcut
+`llmr validate-data configs/benchmarks/shared_v3.yaml` kontrolü geçmeli.
 
 ```bash
 # Planlanan gerçek eğitim config'leri, üç seed (0, 1, 2):
-bash cluster/tosun/submit_train.sh configs/experiments/hybrid_llm_trans__shared_v2_gt.yaml 3
-bash cluster/tosun/submit_train.sh configs/experiments/hybrid_llm_prob__shared_v2_gt.yaml 3
-bash cluster/tosun/submit_train.sh configs/experiments/uniroute_kmeans__shared_v2_dynamic_gt.yaml 3
-bash cluster/tosun/submit_train.sh configs/experiments/uniroute_learned__shared_v2_dynamic_gt.yaml 3
-bash cluster/tosun/submit_train.sh configs/experiments/graphrouter_performance__shared_v2_gt.yaml 3
-bash cluster/tosun/submit_train.sh configs/experiments/graphrouter_balance__shared_v2_gt.yaml 3
-bash cluster/tosun/submit_train.sh configs/experiments/graphrouter_cost__shared_v2_gt.yaml 3
+bash cluster/tosun/submit_train.sh configs/experiments/hybrid_llm_trans__shared_v3_gt.yaml 3
+bash cluster/tosun/submit_train.sh configs/experiments/hybrid_llm_prob__shared_v3_gt.yaml 3
+bash cluster/tosun/submit_train.sh configs/experiments/uniroute_kmeans__shared_v3_dynamic_gt.yaml 3
+bash cluster/tosun/submit_train.sh configs/experiments/uniroute_learned__shared_v3_dynamic_gt.yaml 3
+bash cluster/tosun/submit_train.sh configs/experiments/graphrouter_performance__shared_v3_gt.yaml 3
+bash cluster/tosun/submit_train.sh configs/experiments/graphrouter_balance__shared_v3_gt.yaml 3
+bash cluster/tosun/submit_train.sh configs/experiments/graphrouter_cost__shared_v3_gt.yaml 3
 ```
 
 Bu yedi config ilk ana seti oluşturur (`r_prob`, §4'teki 0/1 GT indirgenmesi
