@@ -1,7 +1,7 @@
 # shared_v2: 12 dense open-weight models; v1's pool stays unchanged.
-# Falcon3-7B-Instruct (7.4556B) replaces the 8.0303B R1 distill model to remove
-# its dedicated long-reasoning regime. Similar size does not mean equal quality.
-# Other revisions are retained from v1; Falcon's revision was checked on 2026-10-19.
+# All twelve model IDs/revisions are retained from v1, including R1-Distill-Llama.
+# The R1 pilot showed truncation at 4096 tokens, not that the model should be removed.
+# v2 increases the common output ceiling; R1 completion still needs a real GPU pilot.
 # SmolLM3 thinking remains disabled. All samples use the benchmark's common budget.
 # cost_per_1k_tokens = rounded parameters (B), a token proxy, never USD.
 # Llama and Gemma still need license acceptance by their assigned collector.
@@ -55,12 +55,12 @@ models:
     chat_template_kwargs: {}
     engine_kwargs: {max_model_len: 16384}
     cost_per_1k_tokens: 8.0
-  - name: falcon3-7b
-    model_id: tiiuae/Falcon3-7B-Instruct
-    revision: 1e57a0ecd176c7c139f289c60a74e57f887c3dfb
+  - name: deepseek-r1-distill-llama-8b
+    model_id: deepseek-ai/DeepSeek-R1-Distill-Llama-8B
+    revision: 6a6f4aa4197940add57724a7707d069478df56b1
     chat_template_kwargs: {}
     engine_kwargs: {max_model_len: 16384}
-    cost_per_1k_tokens: 7.5
+    cost_per_1k_tokens: 8.0
   # ---- large (15-33B) ----
   - name: phi-4
     model_id: microsoft/phi-4

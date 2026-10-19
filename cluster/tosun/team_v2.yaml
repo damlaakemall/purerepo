@@ -11,4 +11,4 @@ members:
     models: [gemma-3-27b, llama-3.1-8b, qwen2.5-7b, llama-3.2-3b]              # 46.2B, all gated models
   - name: İbrahim B
     member: ibrahimb
-    models: [mistral-small-24b, phi-4, falcon3-7b, smollm3-3b]  # 48.9B; Falcon replaces R1
+    models: [mistral-small-24b, phi-4, deepseek-r1-distill-llama-8b, smollm3-3b]  # 49.4B; R1 retained, reasoning tokens count toward cost

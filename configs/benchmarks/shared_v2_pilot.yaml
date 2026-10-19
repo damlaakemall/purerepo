@@ -1,4 +1,4 @@
-# New collection settings: Falcon3 replaces R1; temperature 0.7, top_p 1.0, max 8192 new tokens.
+# Same twelve models, including R1; temperature 0.7, top_p 1.0, max 8192 new tokens.
 # Same source definitions/revisions and split rules as v1, but a separate dataset/release identity.
 # Prepared on 2026-10-19; real v2 GPU pilot and context/token checks are still required.
 # Setup pilot: 30 queries, k=2. Do not select router settings using its test scores.

@@ -100,20 +100,20 @@ hesap yapar, uzun düşünen model de daha çok token harcar. Bu bir USD değild
 
 ## shared_v2: 19 Ekim 2026 hazırlığı
 
-**Durum:** yeni config'ler yerelde hazır; Falcon ve bütün v2 havuzu için gerçek GPU pilotu henüz
+**Durum:** yeni config'ler yerelde hazır; R1 dahil bütün v2 havuzu için gerçek GPU pilotu henüz
 çalıştırılmadı. Yukarıdaki v1 ayarları ve aşağıdaki R1 pilotu tarihsel olarak korunur. Yeni toplama
 `configs/benchmarks/shared_v2.yaml`, kurulum pilotu `configs/benchmarks/shared_v2_pilot.yaml` ile yapılacak.
 Veriler sırasıyla `benchmarks/shared_v2/` ve `benchmarks/shared_v2_pilot/` altında ayrı tutulur.
 
 ### Model ve ortak üretim bütçesi
 
-R1-Distill-Llama 8B yerine **Falcon3-7B-Instruct** seçildi: 7.4556 milyar parametre, ayrı bir model ailesi,
-uzun düşünce rejimi olmayan bir instruct checkpoint. Bu bir kalite eşitliği iddiası değildir. Modelin
-HF revision'ı `1e57a0ecd176c7c139f289c60a74e57f887c3dfb` olarak doğrulandı; mimarisi
-`LlamaForCausalLM`, doğal bağlamı 32768 ve chat template'i mevcuttur.
-[Resmi model kartı](https://huggingface.co/tiiuae/Falcon3-7B-Instruct).
-Diğer on bir ağırlık revision'ı aynı kaldı; yeni havuz `configs/model_pools/team_v2.yaml` içindedir.
-Üye ataması `cluster/tosun/team_v2.yaml` ile seçilir: İbrahim B'de R1'in yerini Falcon alır.
+**R1-Distill-Llama 8B dahil aynı 12 model ve aynı ağırlık revision'ları korunur.** Eski pilotta
+4096-token sınırının cevapları kestiği görüldü; bu sonuç tek başına modelin değiştirilmesini
+gerektirmez. R1'i tutmak model kimliğini sabit bırakır ve uzun düşünmenin kalite/maliyet katkısını
+inceleme olanağı verir. Düşünme token'ları maliyete dahildir; puanlayıcılar nihai cevabı mevcut
+`strip_think` politikasıyla ayırır. 8192 bütçesinin yeterli olduğu henüz kanıtlanmadı.
+Yeni havuz `configs/model_pools/team_v2.yaml`, aynı üye/model atamaları
+`cluster/tosun/team_v2.yaml` içindedir; R1 yine İbrahim B'dedir.
 
 Herkes için `temperature: 0.7`, `top_p: 1.0`, **en fazla 8192 yeni token**; tam koleksiyonda k=10,
 kurulum pilotunda k=2. Yerel referansın CLI varsayılanı top_p=1.0'dır; bu değerin seçilme gerekçesi
