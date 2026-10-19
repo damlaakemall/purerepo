@@ -1,119 +1,147 @@
 # LLM Routing — a common ground for comparing routers
 
-Implementations of LLM **routing** papers, written to understand *what* each router does and *how*, and to compare them **fairly**: every router is trained on the same frozen data, evaluated on the same test split, with the same metrics and baselines.
+> **Routing:** you have several LLMs, some small and cheap, some large and expensive. For each question, a
+> *router* decides which one should answer, so you get the best quality for the money.
 
-> **Routing:** given a query and a pool of LLMs with different costs and abilities, decide which model answers it, so you get the best quality for the money.
+In this repo the team re-implements LLM routing papers and compares them **fairly**: every router is trained
+on the same frozen data, tested on the same test split, and scored with the same metrics.
 
-**Why this repo exists.** It is a learning project: the goal is for the team to learn how to run real workloads on Sabancı's Tosun cluster, and how routers and LLM scoring actually work in code, not only in theory. So router implementations are kept **small and readable**: the paper's method is followed faithfully, but its infrastructure (own data pipelines, ablation variants, distributed training) is left out, and every deliberate deviation is written down. Each paper may also get an explanatory notebook next to its code (planned, see [CONTRIBUTING.md](CONTRIBUTING.md#keep-it-simple)).
+It is a **learning project** at Sabancı University. The goal is to learn how routers and LLM scoring really
+work in code, and how to run real GPU workloads on the Tosun cluster. That is why router code is kept
+**small and readable**: we follow each paper's method, leave out its infrastructure, and write down every
+place where we deviate ([CONTRIBUTING.md → Keep it simple](CONTRIBUTING.md#keep-it-simple)).
 
-**Working with an AI assistant?** [AGENTS.md](AGENTS.md) is the short orientation for AI coding agents (and a good map for new people too).
+## How it works, in three steps
 
-| paper | family | how it decides | code | explainer |
+1. **Collect the data (on Tosun).** Pick a fixed set of questions, have 12 open models answer each one
+   10 times, then score every answer and count its cost. The result is one frozen table that everyone
+   uses.
+2. **Train routers.** Each paper's router learns from the `train` and `val` splits of that table.
+3. **Compare.** Every router is evaluated on the same `test` split with the same quality/cost metrics,
+   and the numbers go into one leaderboard.
+
+## Where we are now
+
+| | status |
+|---|---|
+| Data collection pipeline (`shared_v1`) | ready and tested; the 30-query pilot on Tosun comes first |
+| Routers | one baseline: *quality regression* (from RouterBench) |
+| Planned paper routers | Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT |
+| Open decisions | cost proxy, mixed quality scales, shared accounts, GPUs for the large models, token limit for the reasoning model ([DECISIONS.md](DECISIONS.md)) |
+
+| router | family | how it decides | code | explainer |
 |---|---|---|---|---|
-| *quality regression* (RouterBench baseline) | multi-model | predict every model's quality, pick argmax(quality − λ·cost) | [`routers/baselines.py`](llm_routing/routers/baselines.py) | [docs](docs/concepts/comparison.md) |
+| *quality regression* (RouterBench baseline) | multi-model | predicts each model's quality, picks argmax(quality − λ·cost) | [`routers/baselines.py`](llm_routing/routers/baselines.py) | [docs](docs/concepts/comparison.md) |
 | *next paper…* | | | | |
 
 ## Where to start
 
-| I want to... | read / run |
+| I want to... | go to |
 |---|---|
-| understand what we are doing and why (Türkçe) | [docs/walkthrough/](docs/walkthrough/README.md): each finished project step in one write-up, with a real run. Step 1: [producing the router training data](docs/walkthrough/01_egitim_verisi.md) |
-| learn routing itself | [routing fundamentals](docs/concepts/routing_fundamentals.md) → [how routers are compared](docs/concepts/comparison.md) → [benchmarks & fairness rules](docs/concepts/benchmarks.md) → [metrics](docs/concepts/evaluation.md) |
-| check the code on my laptop | [Quick start](#quick-start-laptop-cpu) below: `pytest -q`, `llmr smoke-pipeline` |
-| generate and score a model on Tosun | [cluster/tosun/README.md](cluster/tosun/README.md); run the 30-query pilot `configs/benchmarks/shared_pilot.yaml` first |
+| understand what we did and why (Türkçe) | [docs/walkthrough/](docs/walkthrough/README.md): one write-up per finished step, with a real run. Step 1: [producing the training data](docs/walkthrough/01_egitim_verisi.md) |
+| learn routing itself | [fundamentals](docs/concepts/routing_fundamentals.md) → [how routers are compared](docs/concepts/comparison.md) → [benchmarks & fairness rules](docs/concepts/benchmarks.md) → [metrics](docs/concepts/evaluation.md) → [leaderboard](results/leaderboard.md) |
+| know how the team works (Türkçe) | [team guide](docs/team/team_workflow.md), [data protocol](docs/team/shared_protocol.md), [router contract](docs/team/router_contract.md) |
+| try the code on my laptop | [Quick start](#quick-start-laptop-cpu) below |
+| generate and score a model on Tosun | [cluster/tosun/README.md](cluster/tosun/README.md) |
 | add a router (paper) | [CONTRIBUTING.md](CONTRIBUTING.md) and the [router contract](docs/team/router_contract.md) |
-| see what is decided / still open | [DECISIONS.md](DECISIONS.md) (open: cost proxy, mixed quality scales, shared accounts, GPUs for the large models, token limit for the reasoning model) |
-| work on it with an AI agent | [AGENTS.md](AGENTS.md): map, commands, rules that must not break |
-
-**Learning path:** [routing fundamentals](docs/concepts/routing_fundamentals.md) → [how routers are compared](docs/concepts/comparison.md) → [benchmarks & fairness rules](docs/concepts/benchmarks.md) → [metrics](docs/concepts/evaluation.md) → [current leaderboard](results/leaderboard.md).
-
-## Team collection protocol
-
-We are building the team's own version of LLM-Routing-Project. Existing routers and
-benchmark configurations remain available. The new `shared-v1` pipeline adds frozen
-query IDs/splits, independent member/model shards, sample-level resume/retry,
-separate ground-truth, offline ArmoRM and BARTScore scoring, validated contribution bundles,
-and immutable long/wide releases with hashes and per-metric benchmark views.
-
-Start with the [team guide (Türkçe)](docs/team/team_workflow.md),
-[technical data protocol](docs/team/shared_protocol.md), and
-[router extension contract](docs/team/router_contract.md).
-
-```bash
-llmr smoke-pipeline --output /tmp/llmr-shared-smoke  # test doubles only; no models or training
-```
-
-Everything runs on Sabancı's Tosun GPUs; no paid APIs. `configs/benchmarks/shared_v1.yaml`
-(GSM8K, MMLU-Pro, BBH, OlympiadBench, MBPP, Alpaca, Multi-News; k = 10) and
-`configs/model_pools/team.yaml` (12 open-weight models, 3B-33B, none shared with the reference repo) are pinned to
-HF commits. Ground truth uses the reference repo's audited evaluators. Planned routers:
-Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT, implemented by
-the team on the new data (the earlier Hybrid LLM implementation was removed); the
-release carries what each needs (per-sample cost, ArmoRM selector, latency), see the
-router contract.
-
-## How it fits together
-
-```
-configs/benchmarks/*.yaml ──► frozen Benchmark (queries, scores[N,M,k], costs[N,M], fixed splits, fingerprint)
-                                   │            (built once on Tosun, shared via HF Hub)
-configs/routers/*.yaml   ──► Router.fit(train, val) ──► Router.sweep(test) ──► quality/cost curve
-configs/experiments/*.yaml         (registry)              same evaluation for every router
-                                                                │
-                                         runs/<benchmark>/<experiment>/<time>_s<seed>/  +  W&B
-                                                                │
-                                                  llmr leaderboard ──► results/leaderboard.md
-```
-
-```
-llm_routing/
-  core/        base.py (Router, BinaryRouter, MultiModelRouter, CascadeRouter), evaluation.py, classifiers.py
-  routers/     one folder per paper + baselines.py
-  data/        benchmark.py (shared format), mixinstruct / routerbench / synthetic loaders, hub.py
-  collection/  team data (shared_v1): build-queries -> generate -> score -> package -> assemble
-  ground_truth/ audited answer-key evaluators used by collection/
-  legacy_pipeline/ older single-user benchmark (ours_v1); kept so its configs still run
-  runner.py    the single train+evaluate procedure;  cli.py: the `llmr` command
-configs/       benchmarks/, routers/, experiments/
-cluster/tosun/ SLURM setup + job scripts for Sabancı's Tosun cluster
-docs/
-  concepts/    routing fundamentals, comparison, benchmarks, evaluation (English)
-  team/        team workflow, data protocol, router contract (Türkçe)
-  walkthrough/ how each project step was done and why (Türkçe)
-  papers/      one explainer per paper
-```
+| work on it with an AI assistant | [AGENTS.md](AGENTS.md): map, commands, rules that must not break |
 
 ## Quick start (laptop, CPU)
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt        # installs the repo itself plus pytest
 
-llmr routers                                                    # list available routers
-llmr train configs/experiments/quality_regression__synthetic.yaml    # seconds, no downloads
-llmr train configs/experiments/quality_regression__routerbench.yaml  # real data (downloads RouterBench)
-llmr train configs/experiments/quality_regression__synthetic.yaml seed=1 router.params.alpha=0.5   # overrides
-llmr leaderboard
-pytest -q
+pytest -q                                                            # all tests, a few seconds
+llmr smoke-pipeline --output /tmp/llmr-smoke                         # the whole data pipeline with fake models
+llmr routers                                                         # list the routers
+llmr train configs/experiments/quality_regression__synthetic.yaml    # train a router, seconds, no downloads
+llmr train configs/experiments/quality_regression__routerbench.yaml  # same on real data (downloads RouterBench)
+llmr leaderboard                                                     # rebuild results/leaderboard.md
 ```
+
+Any config value can be overridden on the command line, for example
+`llmr train configs/experiments/quality_regression__synthetic.yaml seed=1 router.params.alpha=0.5`.
 
 ## On the cluster (Tosun)
 
-See [cluster/tosun/README.md](cluster/tosun/README.md): one-time setup, then
+Real generation and scoring only run on Tosun GPUs. Do the one-time setup in
+[cluster/tosun/README.md](cluster/tosun/README.md), then always start with the 30-query pilot:
 
 ```bash
-bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v1.yaml <model> <member> 4   # collect one model
-bash cluster/tosun/submit_train.sh configs/experiments/<router>__shared_v1.yaml 3              # 3 seeds
+bash cluster/tosun/submit_member.sh configs/benchmarks/shared_pilot.yaml <model> <member> 1   # pilot
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_pilot.yaml <model> <member>    # check it
+bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v1.yaml <model> <member> 4      # full run
 ```
 
-## Adding a router or benchmark
+Router training on Tosun uses `bash cluster/tosun/submit_train.sh <experiment.yaml> <num_seeds>`. There are
+no `shared_v1` experiment configs yet; they come with the first paper router.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). In short: one folder in `llm_routing/routers/`, one YAML in `configs/routers/`, one explainer in `docs/papers/`, one row in [docs/concepts/comparison.md](docs/concepts/comparison.md).
+## The shared data (`shared_v1`)
+
+- **Questions:** GSM8K, MMLU-Pro, BBH, OlympiadBench, MBPP, Alpaca, Multi-News
+  ([`configs/benchmarks/shared_v1.yaml`](configs/benchmarks/shared_v1.yaml)), split once into
+  train / val / test and frozen.
+- **Models:** 12 open-weight models from 3B to 33B, pinned to exact Hugging Face commits
+  ([`configs/model_pools/team.yaml`](configs/model_pools/team.yaml)). Each answers every question 10 times.
+- **Quality**, scored three separate ways that are never mixed: ground truth (answer key, using the
+  reference repo's audited evaluators), ArmoRM (a reward model) and BARTScore.
+- **Cost:** a token proxy (parameters × tokens), **not dollars**.
+- **No paid APIs.** Everything runs on Tosun.
+
+Each team member generates their share of the data, packages it as a checked bundle, and the bundles are
+assembled into one release with hashes. The details are in the [data protocol](docs/team/shared_protocol.md).
+
+## What is where
+
+```
+llm_routing/
+  core/            Router base classes, evaluation metrics, text classifiers
+  routers/         one folder per paper + baselines.py
+  data/            the shared Benchmark format and loaders (synthetic, MixInstruct, RouterBench)
+  collection/      team data collection (shared_v1): questions -> answers -> scores -> release
+  ground_truth/    answer-key checkers (math, multiple choice, code execution, ...)
+  legacy_pipeline/ older single-user benchmark (ours_v1); kept so its configs still run
+  runner.py        the one train + evaluate procedure
+  cli.py           the `llmr` command
+configs/           benchmarks/, model_pools/, routers/, experiments/
+cluster/tosun/     SLURM setup and job scripts for Tosun
+docs/
+  concepts/        routing basics, comparison, benchmarks, metrics (English)
+  team/            team workflow, data protocol, router contract (Türkçe)
+  walkthrough/     how each project step was done and why (Türkçe)
+  papers/          one explainer per paper
+results/           leaderboard and plots
+tests/             CPU tests, also run in CI
+```
+
+How one training run flows:
+
+```
+configs/benchmarks/*.yaml ──► frozen Benchmark (questions, scores, costs, fixed splits, fingerprint)
+configs/routers/*.yaml    ──► Router.fit(train, val) ──► Router.sweep(test) ──► quality/cost curve
+configs/experiments/*.yaml                                                          │
+                                       runs/<benchmark>/<experiment>/<time>_s<seed>/ (+ W&B)
+                                                                                    │
+                                                    llmr leaderboard ──► results/leaderboard.md
+```
+
+## Rules that must not be broken
+
+1. Routers never see the **test split** while training. Thresholds and checkpoints are chosen on `val`.
+2. A benchmark that already has results is **never changed**. Make a new version (`shared_v2.yaml`) instead.
+3. **No paid APIs.**
+4. The three quality scores **stay separate**. A missing ground truth is never filled with another score.
+5. Cost is a **token proxy**. Never report it as dollars.
+
+The full list, with the reasons, is in [AGENTS.md](AGENTS.md#rules-that-must-not-be-broken).
 
 ## Results so far
 
-Full table: [results/leaderboard.md](results/leaderboard.md). Paper routers come next, trained on `shared_v1`.
+Full table: [results/leaderboard.md](results/leaderboard.md). The paper routers will be trained on `shared_v1` next.
 
 ![](results/plots/quality_regression__routerbench.png)
 
-**Quality regression** on RouterBench (11 models): beats every single model except GPT-4 at a fraction of the cost, but is far below the oracle. There's a lot of room for better routers.
+**Quality regression** on RouterBench (11 models) beats every single model except GPT-4 at a fraction of
+the cost, but it is still far below the oracle (the router that always picks the best model). There is a
+lot of room for better routers.
