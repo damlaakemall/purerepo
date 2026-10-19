@@ -1,4 +1,5 @@
 # shared_v3: dated OpenRouter provider tariffs, local Tosun generation only.
+# No model IDs overlap with SU Lab reference e6578414; enforced by test_priced_pool.py.
 # USD per ONE MILLION uncached input/output tokens; no paid inference calls.
 # See docs/walkthrough/01_egitim_verisi.md (shared_v3) for selection and limitations.
 # Pin HF revisions independently: hosted quantization/revision may differ from local weights.

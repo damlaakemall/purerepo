@@ -17,6 +17,21 @@ from llm_routing.leaderboard import build_table
 from llm_routing.runner import run_experiment
 
 
+def test_v3_has_no_models_from_the_reference_pool():
+    # SU Lab configs/models.yaml at e6578414e246469073867d3a8d0c21c5b3e93f92.
+    # Keep this snapshot in the test: CI must not depend on another local checkout or the network.
+    reference_ids = {
+        "Qwen/Qwen3-4B", "google/gemma-4-e2b-it", "Qwen/Qwen3-8B",
+        "google/gemma-4-e4b-it", "deepcogito/cogito-v1-preview-llama-8B",
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", "ibm-granite/granite-4.1-8b",
+        "Qwen/Qwen3.6-27B", "google/gemma-4-26b-a4b-it", "moonshotai/Kimi-K3",
+        "zai-org/GLM-5.3", "gpt-5.4",
+    }
+    cfg = load_benchmark_config("configs/benchmarks/shared_v3.yaml")
+    ours = {m["model_id"].casefold() for m in cfg["models"]}
+    assert ours.isdisjoint(m.casefold() for m in reference_ids)
+
+
 def test_v3_pool_is_pinned_priced_and_preserves_source_protocol():
     cfg = load_benchmark_config("configs/benchmarks/shared_v3.yaml")
     old = load_benchmark_config("configs/benchmarks/shared_v2.yaml")

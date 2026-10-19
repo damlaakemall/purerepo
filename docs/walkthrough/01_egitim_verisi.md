@@ -35,6 +35,13 @@ Ortak üretim T=0.7, top_p=1.0, en çok 8192 yeni token, toplam 16384 bağlamdı
 Qwen3-14B'de thinking kapalı, Qwen3-32B'de açık; ikinci model düşünme çeşitliliğini
 korur. Düşünme token'ları çıktı maliyetine dahildir, puanlamadan önce izler temizlenir.
 
+Referansın 12 model kimliğiyle karşılaştırmada **ortak model sayısı 0/12**.
+Yukarıdaki “korunan altı” bizim eski v2 havuzumuzdan korunanlardır; referanstan
+alınmış modeller değildir. Örneğin referansta Qwen3-4B/8B ve Gemma4 varken bizde
+Qwen3-14B/32B ve Gemma3 var. Aynı model ailesinin farklı checkpoint'leri bulunabilir;
+birebir model kimliği ortak değildir. `test_v3_has_no_models_from_the_reference_pool`
+referans commit'indeki listeye karşı bu ayrımı internet gerektirmeden denetler.
+
 ### Donmuş fiyat tablosu
 
 **USD / 1 milyon token, 2026-10-19.** Bunlar model kataloğunun değişken “en düşük”
