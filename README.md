@@ -22,6 +22,11 @@ place where we deviate ([CONTRIBUTING.md → Keep it simple](CONTRIBUTING.md#kee
 
 ## Where we are now
 
+The next collection is prepared as **`shared_v2`**: all twelve models, including R1, are retained with
+an 8192-token output ceiling and `top_p: 1.0`; large models request one 96 GB RTX PRO 6000.
+The real v2 GPU pilot is still pending. Existing v1 configs and data stay intact.
+See [the collection walkthrough](docs/walkthrough/01_egitim_verisi.md#shared_v2-19-ekim-2026-hazırlığı).
+
 | | status |
 |---|---|
 | Data collection pipeline (`shared_v1`) | ready and tested; the 30-query pilot on Tosun comes first |

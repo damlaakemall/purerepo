@@ -1,0 +1,113 @@
+# Same twelve models, including R1; temperature 0.7, top_p 1.0, max 8192 new tokens.
+# Same source definitions/revisions and split rules as v1, but a separate dataset/release identity.
+# Prepared on 2026-10-19; real v2 GPU pilot and context/token checks are still required.
+# Setup pilot: 30 queries, k=2. Do not select router settings using its test scores.
+protocol: shared-v1
+name: shared_v2_pilot
+version: pilot-v2
+loader: generated
+path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/shared_v2_pilot
+hub_repo: null
+hub_revision: null
+seed: 42
+splits:
+  train: 0.6
+  val: 0.1
+  test: 0.3
+near_duplicates:
+  method: embedding
+  threshold: 0.99
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  revision: 1110a243fdf4706b3f48f1d95db1a4f5529b4d41
+ood_datasets: []
+model_pool: configs/model_pools/team_v2.yaml
+collection_team: cluster/tosun/team_v2.yaml
+quality_metric: ground_truth
+allow_partial: false
+required_scores:
+- ground_truth
+- armorm
+- bartscore
+sources:
+- name: gsm8k
+  hf_id: openai/gsm8k
+  hf_config: main
+  hf_split: test
+  revision: 740312add88f781978c0658806c59bc2815b9866
+  n: 4
+  formatter: gsm8k
+- name: mmlu_pro
+  hf_id: TIGER-Lab/MMLU-Pro
+  hf_split: test
+  revision: b189ec765aa7ed75c8acfea42df31fdae71f97be
+  id_field: question_id
+  n: 4
+  formatter: mmlu_pro
+- name: bbh
+  hf_id: lukaemon/bbh
+  hf_config:
+  - date_understanding
+  - navigate
+  - object_counting
+  hf_split: test
+  revision: 982bb89fd79532a8ac676a61fc42eb1aeec63f99
+  n_per_config: 2
+  formatter: bbh
+- name: olympiadbench
+  hf_id: Hothan/OlympiadBench
+  hf_config: OE_TO_maths_en_COMP
+  hf_split: train
+  revision: 91184b52131e7fc9455fef848035173aea8cc01a
+  id_field: id
+  n: 4
+  formatter: olympiadbench
+- name: mbpp
+  hf_id: google-research-datasets/mbpp
+  hf_config: full
+  hf_split: test
+  revision: 4bb6404fdc6cacfda99d4ac4205087b89d32030c
+  id_field: task_id
+  n: 4
+  formatter: mbpp
+- name: alpaca
+  hf_id: tatsu-lab/alpaca
+  hf_split: train
+  revision: dce01c9b08f87459cf36a430d809084718273017
+  n: 4
+  formatter: alpaca
+- name: multi_news
+  hf_id: alexfabbri/multi_news
+  hf_split: test
+  revision: 4b42aeea3ec9fb96cdadd37e25e635d36b540713
+  data_files:
+    test: default/test/*.parquet
+  n: 4
+  max_query_chars: 12000
+  formatter: multi_news
+generation:
+  engine: vllm
+  k: 2
+  temperature: 0.7
+  top_p: 1.0
+  max_new_tokens: 8192
+scoring:
+  ground_truth:
+    text_policy: strip_think
+    mbpp_timeout: 5
+  armorm:
+    model_id: RLHFlow/ArmoRM-Llama3-8B-v0.1
+    revision: eb2676d20da2f2d41082289d23c59b9f7427f955
+    device_map:
+      ? ''
+      : 0
+    text_policy: strip_think
+  bartscore:
+    model_name: facebook/bart-large
+    revision: cb48c1365bd826bd521f650dc2e0940aee54720c
+    max_length: 512
+    text_policy: strip_think
+cost:
+  definition: token_proxy
+  snapshot_date: '2026-10-19'
+  note: 'cost_per_1k_tokens = parameters (B), all models dense. Local Tosun GPUs only,
+    no API prices. DECISIONS.md #2.'

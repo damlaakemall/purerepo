@@ -98,6 +98,81 @@ commit'ine sabit; herkes birebir aynı ağırlıkları kullanır.
 `parametre sayısı (milyar) × (prompt + cevap token'ı) / 1000`. 32B'lik model token başına 3B'liğin ~10 katı
 hesap yapar, uzun düşünen model de daha çok token harcar. Bu bir USD değildir.
 
+## shared_v2: 19 Ekim 2026 hazırlığı
+
+**Durum:** yeni config'ler yerelde hazır; R1 dahil bütün v2 havuzu için gerçek GPU pilotu henüz
+çalıştırılmadı. Yukarıdaki v1 ayarları ve aşağıdaki R1 pilotu tarihsel olarak korunur. Yeni toplama
+`configs/benchmarks/shared_v2.yaml`, kurulum pilotu `configs/benchmarks/shared_v2_pilot.yaml` ile yapılacak.
+Veriler sırasıyla `benchmarks/shared_v2/` ve `benchmarks/shared_v2_pilot/` altında ayrı tutulur.
+
+### Model ve ortak üretim bütçesi
+
+**R1-Distill-Llama 8B dahil aynı 12 model ve aynı ağırlık revision'ları korunur.** Eski pilotta
+4096-token sınırının cevapları kestiği görüldü; bu sonuç tek başına modelin değiştirilmesini
+gerektirmez. R1'i tutmak model kimliğini sabit bırakır ve uzun düşünmenin kalite/maliyet katkısını
+inceleme olanağı verir. Düşünme token'ları maliyete dahildir; puanlayıcılar nihai cevabı mevcut
+`strip_think` politikasıyla ayırır. 8192 bütçesinin yeterli olduğu henüz kanıtlanmadı.
+Yeni havuz `configs/model_pools/team_v2.yaml`, aynı üye/model atamaları
+`cluster/tosun/team_v2.yaml` içindedir; R1 yine İbrahim B'dedir.
+
+Herkes için `temperature: 0.7`, `top_p: 1.0`, **en fazla 8192 yeni token**; tam koleksiyonda k=10,
+kurulum pilotunda k=2. Yerel referansın CLI varsayılanı top_p=1.0'dır; bu değerin seçilme gerekçesi
+belgelenmemiştir. Eski 0.95 ayarının birebir referans eşleşmesi olduğu iddia edilmez.
+
+Çıktı limiti modele prompt içinde söylenmez. Normal üretimde model erken EOS üretirse hemen durur:
+600 token'da biten cevap, sınır 8192 diye 8192 token'a uzamaz. Üst sınırın artırılması tek başına
+token olasılıklarını değiştirmez; backend/batch farklarından dolayı bit düzeyinde aynı cevap
+garantisi verilmez. Yüksek sınır bir cevabın tamamlandığını da garanti etmez: tekrar döngüsü, erken
+EOS veya `finish_reason: length` ayrı kontrol edilir. Maliyet ayrılan bütçeden değil, gerçek token
+sayısından hesaplanır.
+
+Toplam bağlam her model için 16384 olarak korunur; **prompt token'ları + 8192 ≤ 16384** olmalıdır.
+Phi-4'ün doğal bağlamı 16384 olduğundan her modele gelişigüzel 32768 çıktı bütçesi verilemez. V2
+pilotunda modelin tokenizer'ıyla gerçek prompt uzunluğu ve kesilme oranı kontrol edilmelidir.
+Uzun cevapların ArmoRM bağlamına sığması ve BARTScore'un mevcut 512-token kesmesi de ayrı sınırlardır.
+
+### Tosun'da canlı kontrol
+
+19 Ekim 2026'da login node'da şu salt okuma komutları çalıştırıldı:
+
+```bash
+sinfo -p cuda -N -o "%N|%G|%m|%t"
+scontrol show nodes
+squeue -u "$USER" -o "%.18i %.15j %.9T %.10M %.30R"
+```
+
+| node | gerçek GPU kaynak adı | kart |
+|---|---|---|
+| cn02, cn03 | `rtx_pro_6000:1` | RTX PRO 6000, 96 GB |
+| cn21 | `rtx_pro_6000:2` | iki RTX PRO 6000, 96 GB/kart |
+| cn08 | `a100_80gb:1` | A100, 80 GB |
+| cn18 | `h200_nvl:1`, `rtx_4500:2` | H200 141 GB ve iki 24 GB kart |
+
+Kullanıcının kuyruğu o anda boştu; bu, kümenin boş olduğu anlamına gelmez. A100, H200 ve cn21'in
+GPU'ları diğer işlere ayrılmıştı. cn02/cn03'te GPU ayrılmamış görünse de CPU kaynaklarının çoğu doluydu;
+başlama zamanı garanti edilemez.
+
+V2'de Phi-4 ve üç büyük modelin generation işi `gpu:rtx_pro_6000:1` ister. `submit_member.sh` modelin
+`gpu_type` alanını yalnız generation'a uygular; ArmoRM/BARTScore küçük kartlarda kendi isteklerini korur.
+`LLMR_GPU_TYPE` açıkça verilirse model ayarını geçersiz kılar; gerçek alternatif adlar `a100_80gb` ve
+`h200_nvl`'dir. Tek kartta sığma ve throughput, gerçek pilot geçmeden doğrulanmış sayılmaz.
+
+Tosun'daki mevcut `pilot_tosun` paketi ayrıca salt okunarak kontrol edildi: **60 başarılı cevap,
+51 stop / 9 length, en uzun prompt 2199 token, en uzun çıktı 4096 token**. GT, ArmoRM ve BARTScore'un
+her birinde 60 başarılı skor, sıfır işlem hatası vardı. Bunlar eski R1 pilotudur; v2 başarısı değildir.
+Uzak checkout eski modül yerleşiminde ve kaydedilmemiş değişiklikler içeriyordu; üzerine dosya
+yazılmadı, `git pull` veya yeni GPU işi başlatılmadı.
+
+Yerel doğrulama: **79 test geçti**; test modelleriyle 30 soru / 120 cevap içeren uçtan uca smoke
+release'i doğrulandı. V1/v2 kaynakları, scorer ayarları ve split kuralları eşit; release kimlikleri ve
+veri yolları farklı olarak kontrol edildi. Güncellenen submit script'i ayrıca Tosun'un Bash 5.2.21
+ortamında sahte scheduler ile çalıştırıldı: v1 GPU isteği, v2'nin generation/scorer ayrımı ve H200
+environment override'ı geçti; bu kontrol gerçek iş submit etmedi.
+
+Kalite kanalları ayrı kalır; mevcut `evaluate-data` kaynak bazında da sonuç verir. Beş doğrulanabilir
+kaynağın doğruluğu ve Alpaca/Multi-News token F1'i raporda ayrı okunmalıdır. Son test skorları üretim
+ayarlarını veya router eşiklerini seçmek için kullanılmaz.
+
 ## 3. Cevap üretme: Tosun'da bir modeli çalıştırmak
 
 **Tosun'un yapısı.** İşler SLURM ile yürür: `sbatch` ile kuyruğa verilir, boş GPU bulununca bir compute

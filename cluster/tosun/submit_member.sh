@@ -9,23 +9,28 @@ source "$(dirname "$0")/config.sh"
 llmr_activate
 CFG="$1"; MODEL="$2"; MEMBER="$3"; NUM_SHARDS="${4:-1}"
 [[ "$NUM_SHARDS" =~ ^[1-9][0-9]*$ ]] || { echo "NUM_SHARDS must be positive" >&2; exit 1; }
-read -r GPUS CHANNELS < <(python - "$CFG" "$MODEL" <<'PY'
+read -r GPUS CHANNELS MODEL_GPU_TYPE < <(python - "$CFG" "$MODEL" <<'PY'
 import sys
 from llm_routing.config import load_benchmark_config
 from llm_routing.collection import channels
 from llm_routing.collection.dataset import load_dataset, model_pool
 cfg = load_benchmark_config(sys.argv[1])
 load_dataset(cfg)  # hash-check before reserving GPUs
-print(int(model_pool(cfg)[sys.argv[2]].get("gpus", 1)), ",".join(channels(cfg)))
+model = model_pool(cfg)[sys.argv[2]]
+print(int(model.get("gpus", 1)), ",".join(channels(cfg)), model.get("gpu_type", "any"))
 PY
 )
+# Generation may need a larger card than the scorers. An explicit environment override still wins.
+GEN_GPU_TYPE="${LLMR_GPU_TYPE:-$MODEL_GPU_TYPE}"
+[ "$GEN_GPU_TYPE" != any ] || GEN_GPU_TYPE=""
+GEN_GRES="gpu:${GEN_GPU_TYPE:+$GEN_GPU_TYPE:}$GPUS"
 mkdir -p logs
 COMMON=(--parsable --partition="$LLMR_PARTITION" --array="0-$((NUM_SHARDS-1))")
 [ -z "$LLMR_ACCOUNT" ] || COMMON+=(--account="$LLMR_ACCOUNT")
 [ -z "$LLMR_QOS" ] || COMMON+=(--qos="$LLMR_QOS")
 [ -z "$LLMR_EXCLUDE" ] || COMMON+=(--exclude="$LLMR_EXCLUDE")
 JOB=cluster/tosun/jobs/member.sbatch
-GEN=$(sbatch "${COMMON[@]}" --gres="$(llmr_gres "$GPUS")" --mem=$((64 * GPUS))G --cpus-per-task=$((8 * GPUS)) \
+GEN=$(sbatch "${COMMON[@]}" --gres="$GEN_GRES" --mem=$((64 * GPUS))G --cpus-per-task=$((8 * GPUS)) \
       "$JOB" "$CFG" "$MODEL" "$MEMBER" "$NUM_SHARDS" generate)
 GEN="${GEN%%;*}"
 # Scoring channels are independent of each other: all start once generation finished.
@@ -40,4 +45,4 @@ done
 AFTER=$(IFS=:; echo "${SCORED[*]}")
 PACK=$(sbatch "${COMMON[@]}" --dependency="afterok:$AFTER" "$JOB" "$CFG" "$MODEL" "$MEMBER" "$NUM_SHARDS" package)
 PACK="${PACK%%;*}"
-echo "Collection submitted: generation=$GEN ($GPUS GPU) scoring[$CHANNELS]=${SCORED[*]} package=$PACK"
+echo "Collection submitted: generation=$GEN ($GEN_GRES) scoring[$CHANNELS]=${SCORED[*]} package=$PACK"

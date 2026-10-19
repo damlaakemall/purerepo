@@ -3,6 +3,11 @@
 Çalışma reposu `damlaakemall/purerepo`; hedef SU Lab LLM-Routing-Project'in ekip için
 ayrı sürümü. Başlangıç: [teknik protokol](shared_protocol.md).
 
+**19 Ekim 2026:** aşağıdaki v1 akışı korunur. Sonraki toplama için `shared_v2.yaml` ve
+`shared_v2_pilot.yaml` hazırlandı: R1 dahil aynı 12 model, ortak 8192 çıktı token'ı ve top_p=1.0.
+V2 config'lerindeki `collection_team` alanı `cluster/tosun/team_v2.yaml` atamasını seçer; üyeler değişmez.
+V2'nin gerçek GPU pilotu bekliyor. [Gerekçe ve canlı Tosun kontrolü](../walkthrough/01_egitim_verisi.md#shared_v2-19-ekim-2026-hazırlığı).
+
 ## 0. Üç kişiyiz: kim ne yapar
 
 12 model üç kişiye dörder dörder dağıtıldı. Atamaların tek kaynağı

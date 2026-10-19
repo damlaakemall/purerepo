@@ -1,0 +1,14 @@
+# shared_v2 collection assignment; v1 keeps cluster/tosun/team.yaml.
+# Four models each, same collectors; large-model generation requests one 96 GB GPU.
+# submit_my_models.sh reads this through the benchmark collection_team field.
+members:
+  - name: İbrahim G
+    member: ibrahimg
+    coordinator: true
+    models: [qwen2.5-32b, olmo-3-7b, mistral-7b-v0.3, phi-4-mini]              # 51.1B
+  - name: Damla
+    member: damla
+    models: [gemma-3-27b, llama-3.1-8b, qwen2.5-7b, llama-3.2-3b]              # 46.2B, all gated models
+  - name: İbrahim B
+    member: ibrahimb
+    models: [mistral-small-24b, phi-4, deepseek-r1-distill-llama-8b, smollm3-3b]  # 49.4B; R1 retained, reasoning tokens count toward cost
