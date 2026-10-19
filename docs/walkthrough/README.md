@@ -10,9 +10,9 @@ genel işleyişini gerçek bir koşuyla gösterir.
 | 1 | [Router'lar için eğitim verisi üretmek](01_egitim_verisi.md): sorular, modeller, Tosun'da cevap üretme, puanlama, kontrol | pilotla doğrulandı (15 Ekim 2026), tam koleksiyon bekliyor |
 | 2 | Router'ları eğitmek ve karşılaştırmak (her makale bir bölüm) | sırada |
 
-Önce [routing temelleri](../routing_fundamentals.md) okunursa bu adımların neden gerektiği kendiliğinden
-anlaşılır. Ayrıntılı kurallar ve dosya biçimleri: [teknik protokol](../shared_protocol.md),
-[ekip rehberi](../team_workflow.md), [Tosun README](../../cluster/tosun/README.md).
+Önce [routing temelleri](../concepts/routing_fundamentals.md) okunursa bu adımların neden gerektiği kendiliğinden
+anlaşılır. Ayrıntılı kurallar ve dosya biçimleri: [teknik protokol](../team/shared_protocol.md),
+[ekip rehberi](../team/team_workflow.md), [Tosun README](../../cluster/tosun/README.md).
 
 ## Yeni yazı ne zaman eklenir
 

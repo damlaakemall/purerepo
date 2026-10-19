@@ -109,7 +109,7 @@ def environment():
             packages[name] = version(name)
         except PackageNotFoundError:
             packages[name] = None
-    root = Path(__file__).resolve().parents[3]
+    root = Path(__file__).resolve().parents[2]
     result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True)
     status = subprocess.run(["git", "status", "--porcelain"], cwd=root, text=True, capture_output=True)
     source_hash = digest({p.relative_to(root).as_posix(): file_hash(p) for p in sorted((root / "llm_routing").rglob("*.py"))})

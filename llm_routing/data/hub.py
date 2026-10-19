@@ -11,10 +11,10 @@ def _validate(path):
     man = json.loads((path / "manifest.json").read_text())
     if man.get("protocol") == "shared-v1":
         if (path / "long.parquet").exists():
-            from ..pipeline.shared.assemble import validate_release
+            from ..collection.assemble import validate_release
             validate_release(path)
         else:
-            from ..pipeline.shared.io import verify
+            from ..collection.io import verify
             verify(path, ("run.json", "responses.jsonl"))
     else:
         from .benchmark import Benchmark

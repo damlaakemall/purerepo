@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ...data.benchmark import Benchmark, safe_name
+from ..data.benchmark import Benchmark, safe_name
 from . import CHANNELS, PROTOCOL, channels, is_scored
 from .collect import generation_config, job_spec, response_hash
 from .dataset import load_dataset, model_pool

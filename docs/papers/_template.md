@@ -15,7 +15,7 @@ ASCII diagram of the decision flow: what the router sees, what it outputs, which
 - Paper-specific tricks (with the equation and where it lives in our code)
 
 ## 4. Router card
-Fill in the row for [docs/comparison.md](../comparison.md): decision time, candidates, learns, labels, k samples, model, knob, overhead.
+Fill in the row for [docs/concepts/comparison.md](../concepts/comparison.md): decision time, candidates, learns, labels, k samples, model, knob, overhead.
 
 ## 5. Paper setup vs. our implementation
 | | paper | ours |

@@ -32,7 +32,7 @@ def prepare(cfg: dict) -> Benchmark:
 
         return load_routerbench(name=cfg["name"], **p)
     if kind == "generated":
-        from ..pipeline.build import assemble
+        from ..legacy_pipeline.build import assemble
 
         return assemble(cfg)
     raise KeyError(f"unknown loader {kind!r}")
@@ -41,7 +41,7 @@ def prepare(cfg: dict) -> Benchmark:
 def load_benchmark(cfg: dict, with_responses: bool = False, rebuild: bool = False) -> Benchmark:
     path = cfg["path"]
     if cfg.get("protocol") == "shared-v1":
-        from ..pipeline.shared.assemble import load_view
+        from ..collection.assemble import load_view
         # Training never assembles, downloads, or regenerates a shared release.
         return load_view(cfg, with_responses)
     if not rebuild and os.path.exists(os.path.join(path, "manifest.json")):

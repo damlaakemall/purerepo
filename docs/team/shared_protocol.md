@@ -35,7 +35,7 @@ veriyle baştan yazılacak.
 kaydeder. ID = kaynak adı + kaynak örnek kimliği/soru içeriğinin SHA256 özeti.
 Satır sırası değişmesi ID'yi değiştirmez. Soru değişirse ID de değişir.
 
-Split referans repodaki gibi iki adımda çizilir ([`splits.py`](../llm_routing/pipeline/shared/splits.py)):
+Split referans repodaki gibi iki adımda çizilir ([`splits.py`](../../llm_routing/collection/splits.py)):
 
 1. **Neredeyse-aynı gruplar.** Bütün sorular `all-MiniLM-L6-v2` (sabit revision) ile
    vektöre çevrilir; kosinüs benzerliği ≥ 0,99 olan sorular bağlanır ve bağlı sorular tek
@@ -70,7 +70,7 @@ dataset manifestine yazılır. Çok-config'li kaynaklar (`hf_config` listesi, BB
 `vllm` (varsayılan) veya `hf` (vLLM bir modeli henüz desteklemiyorsa yedek). `api`
 motoru kaldırıldı; config'te yazılırsa hata verir.
 
-Havuz: [`configs/model_pools/team.yaml`](../configs/model_pools/team.yaml), referans
+Havuz: [`configs/model_pools/team.yaml`](../../configs/model_pools/team.yaml), referans
 repodakilerden tamamen farklı 12 açık ağırlıklı model, 3B'den 33B'ye: küçük (SmolLM3 3B,
 Llama 3.2 3B, Phi-4-mini), orta (Mistral 7B v0.3, OLMo 3 7B, Qwen2.5 7B, Llama 3.1 8B,
 DeepSeek-R1-Distill-Llama 8B), büyük (Phi-4 15B, Mistral Small 24B, Gemma 3 27B,
@@ -118,7 +118,7 @@ veya kaynak kod hash'i değiştiğinde aynı işe resume edilmez.
 
 **Ground truth**, referans repodaki (SU Lab LLM-Routing-Project) blind audit'lerle
 sağlamlaştırılmış evaluator'ların kopyasıdır:
-[`llm_routing/pipeline/ground_truth/`](../llm_routing/pipeline/ground_truth/). Her soru
+[`llm_routing/ground_truth/`](../../llm_routing/ground_truth/). Her soru
 `answer_type`, `gold` ve gerekirse `aux` taşır:
 
 | kaynak | answer_type | skor |
@@ -134,7 +134,7 @@ Burada referansa göre üç düzeltme yapıldı (testleri `tests/test_ground_tru
 MCQ fallback'i "A cache is…" gibi bir cümleyi artık A şıkkı saymaz (harften sonra
 ayraç veya satır sonu gerekir); BBH'de altın `(B)` iken "Answer: B" doğru sayılır;
 MBPP zaman aşımı scoring hatası değil yanlış cevaptır (`mode: timeout`). Sorular,
-evaluator'ın ilk okuduğu biçimi ister ([`formatters.py`](../llm_routing/pipeline/shared/formatters.py)).
+evaluator'ın ilk okuduğu biçimi ister ([`formatters.py`](../../llm_routing/collection/formatters.py)).
 Gold'u olmayan kaynakta `answer_type: null` olur ve GT **null** kalır; ArmoRM bunun
 yerine GT sayılmaz. MBPP model kodu çalıştırır: GT skorlamasını compute node'da yapın.
 
@@ -145,7 +145,7 @@ Context aşımı sessiz truncation yerine hata olur (Multi-News bu yüzden
 `max_query_chars` ile önceden süzülür; uzun örnekler kesilmez, atlanır). ArmoRM
 response üretmez veya router training yapmaz. `trust_remote_code=True` sabit
 revision ile kullanılır. Tosun pilotunda (2026-10-15) gerçek ArmoRM ile çalıştı ve referans repo'nun
-fonksiyonuyla 60 cevapta aynı skoru verdi ([anlatım](walkthrough/01_egitim_verisi.md#4-puanlama-bir-cevabın-iyi-olduğuna-nasıl-karar-veriyoruz)).
+fonksiyonuyla 60 cevapta aynı skoru verdi ([anlatım](../walkthrough/01_egitim_verisi.md#4-puanlama-bir-cevabın-iyi-olduğuna-nasıl-karar-veriyoruz)).
 
 **BARTScore**, referans repo nasıl hesaplıyorsa öyle hesaplanır (`bart_scoring_pipeline.py`):
 `facebook/bart-large` (sabit revision) ile prompt verildiğinde cevabın token log-olasılıklarının

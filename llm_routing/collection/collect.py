@@ -33,7 +33,7 @@ def job_spec(cfg, model_name, member, shard_index, num_shards):
     g = generation_config(cfg, model)
     spec = {"protocol": PROTOCOL, "dataset_id": dataset["dataset_id"], "model": model,
             "generation": g, "seed": cfg["seed"], "member": member, "shard_index": shard_index, "num_shards": num_shards}
-    from ...data.benchmark import safe_name
+    from ..data.benchmark import safe_name
     path = Path(cfg["path"]) / "contributions" / member / safe_name(model_name) / f"shard-{shard_index:05d}-of-{num_shards:05d}"
     selected = [r for r in rows if int(digest(r["id"])[:16], 16) % num_shards == shard_index]
     return path, selected, spec

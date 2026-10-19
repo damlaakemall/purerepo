@@ -51,7 +51,7 @@ def main(argv=None):
     from .config import load_benchmark_config, load_experiment
 
     if a.cmd == "smoke-pipeline":
-        from .pipeline.shared.smoke import run_smoke
+        from .collection.smoke import run_smoke
         run_smoke(a.output)
     elif a.cmd == "train":
         from .runner import run_experiment
@@ -67,52 +67,65 @@ def main(argv=None):
         print(write_leaderboard(a.runs, a.out))
     else:
         cfg = load_benchmark_config(a.config, a.overrides)
+        shared = cfg.get("protocol") == "shared-v1"  # team data: llm_routing.collection; older configs: legacy_pipeline
         if a.cmd in ("prepare", "info"):
             from .data.loaders import load_benchmark
 
             b = load_benchmark(cfg, rebuild=getattr(a, "rebuild", False))
             print(json.dumps(b.summary(), indent=2))
         elif a.cmd == "build-queries":
-            from .pipeline.build import build_queries
+            if shared:
+                from .collection.dataset import build_queries
+            else:
+                from .legacy_pipeline.build import build_queries
 
             build_queries(cfg)
         elif a.cmd == "validate-data":
-            from .pipeline.shared.assemble import frozen_dir, validate_release
+            from .collection.assemble import frozen_dir, validate_release
             print(json.dumps(validate_release(frozen_dir(cfg)), indent=2))
         elif a.cmd == "evaluate-data":
-            from .pipeline.shared.evaluate import evaluate_data
+            from .collection.evaluate import evaluate_data
             print(json.dumps(evaluate_data(cfg), indent=2))
         elif a.cmd == "package-contribution":
-            from .pipeline.shared.assemble import package
+            from .collection.assemble import package
             options = {k: getattr(a, k) for k in ("member", "shard_index", "num_shards") if getattr(a, k) is not None}
             print(package(cfg, a.model, **options))
         elif a.cmd == "generate":
-            from .pipeline.build import generate
+            if shared:
+                from .collection.collect import generate
+            else:
+                from .legacy_pipeline.build import generate
 
             options = {k: getattr(a, k) for k in ("member", "shard_index", "num_shards", "max_retries", "retry_delay", "batch_size") if getattr(a, k) is not None}
             generate(cfg, a.model, **options)
         elif a.cmd == "score":
-            from .pipeline.build import score
+            if shared:
+                from .collection.collect import score
+            else:
+                from .legacy_pipeline.build import score
 
             options = {k: getattr(a, k) for k in ("member", "shard_index", "num_shards", "scorer") if getattr(a, k) is not None}
             score(cfg, a.model, **options)
         elif a.cmd == "assemble":
-            from .pipeline.build import assemble
+            if shared:
+                from .collection.assemble import assemble
+            else:
+                from .legacy_pipeline.build import assemble
 
             assemble(cfg)
         elif a.cmd == "push-data":
             from .data.hub import push
 
-            if cfg.get("protocol") == "shared-v1":
-                from .pipeline.shared.assemble import frozen_dir
+            if shared:
+                from .collection.assemble import frozen_dir
                 push(str(frozen_dir(cfg)), cfg["hub_repo"])
             else:
                 push(cfg["path"], cfg["hub_repo"])
         elif a.cmd == "pull-data":
             from .data.hub import pull
 
-            if cfg.get("protocol") == "shared-v1":
-                from .pipeline.shared.assemble import frozen_dir
+            if shared:
+                from .collection.assemble import frozen_dir
                 if not cfg.get("hub_revision"):
                     raise ValueError("shared releases require a pinned hub_revision commit")
                 pull(cfg["hub_repo"], str(frozen_dir(cfg)), cfg["hub_revision"])

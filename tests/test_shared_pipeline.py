@@ -15,11 +15,11 @@ from llm_routing.core.base import Decision
 from llm_routing.core.evaluation import curve
 from llm_routing.data.benchmark import Benchmark
 from llm_routing.data.loaders import load_benchmark
-from llm_routing.pipeline.shared.assemble import assemble, frozen_dir, package, validate_release
-from llm_routing.pipeline.shared.collect import generate, job_spec, score
-from llm_routing.pipeline.shared.dataset import build_queries, load_dataset
-from llm_routing.pipeline.shared.io import digest, read_jsonl, seal, verify, write_json
-from llm_routing.pipeline.shared.smoke import run_smoke
+from llm_routing.collection.assemble import assemble, frozen_dir, package, validate_release
+from llm_routing.collection.collect import generate, job_spec, score
+from llm_routing.collection.dataset import build_queries, load_dataset
+from llm_routing.collection.io import digest, read_jsonl, seal, verify, write_json
+from llm_routing.collection.smoke import run_smoke
 
 
 @pytest.fixture(scope="module")
@@ -234,9 +234,9 @@ def test_query_text_changes_fingerprint_and_load_detects_tamper(smoke, tmp_path)
 
 def test_cli_dotlist_after_options_and_model_pool(cfg, monkeypatch):
     from llm_routing.cli import main
-    from llm_routing.pipeline import build
+    from llm_routing.collection import collect
     captured = []
-    monkeypatch.setattr(build, "generate", lambda c, m, **kw: captured.append((c, m, kw)))
+    monkeypatch.setattr(collect, "generate", lambda c, m, **kw: captured.append((c, m, kw)))
     main(["generate", "configs/benchmarks/shared_v1.yaml", "--model", "smollm3-3b", "--member", "alice", "generation.k=2"])
     c, m, kw = captured[0]
     assert c["generation"]["k"] == 2 and c["models"][0]["name"] == m and kw["member"] == "alice"
@@ -380,7 +380,7 @@ def test_bartscore_channel_scores_every_response_and_gets_its_own_view(tmp_path)
     assert np.isfinite(view.scores[:, 0, :]).all() and (view.scores[:, 0, :] < 0).all()
     assert set(gt.extras) >= {"armorm", "bartscore"} and set(view.extras) >= {"ground_truth", "armorm"}
     assert validate_release(frozen_dir(c))["channels"] == ["ground_truth", "armorm", "bartscore"]
-    from llm_routing.pipeline.shared.evaluate import evaluate_data
+    from llm_routing.collection.evaluate import evaluate_data
     assert set(evaluate_data(c)["channels"]) == {"ground_truth", "armorm", "bartscore"}
 
 

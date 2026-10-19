@@ -10,7 +10,7 @@ from llm_routing.config import load_experiment  # noqa: E402
 from llm_routing.core.evaluation import aiq, curve, oracle_point, summarize  # noqa: E402
 from llm_routing.data.benchmark import Benchmark, assign_splits  # noqa: E402
 from llm_routing.data.synthetic import make_synthetic_benchmark  # noqa: E402
-from llm_routing.pipeline.scorers import get_scorer  # noqa: E402
+from llm_routing.legacy_pipeline.scorers import get_scorer  # noqa: E402
 from llm_routing.registry import build_router, list_routers  # noqa: E402
 from llm_routing.routers.baselines import OracleRouter  # noqa: E402
 

@@ -14,8 +14,8 @@ import statistics
 from collections import Counter, defaultdict
 
 from llm_routing.config import load_benchmark_config
-from llm_routing.pipeline.shared.collect import answer_text, job_spec
-from llm_routing.pipeline.shared.io import read_jsonl
+from llm_routing.collection.collect import answer_text, job_spec
+from llm_routing.collection.io import read_jsonl
 
 
 def by_key(rows):

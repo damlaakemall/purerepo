@@ -1,7 +1,7 @@
 """Splits as in the reference repo: stratified per source, near-duplicate groups never split up."""
 import numpy as np
 
-from llm_routing.pipeline.shared.splits import near_duplicate_groups, stratified_splits
+from llm_routing.collection.splits import near_duplicate_groups, stratified_splits
 
 FRACTIONS = {"train": 0.6, "val": 0.1, "test": 0.3}
 
