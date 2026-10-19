@@ -35,7 +35,7 @@ def test_shared_like_benchmark_has_the_release_shape():
 
 
 def _experiment(tmp_path, router_type, n=600):
-    cfg = load_experiment(os.path.join(ROOT, "configs", "experiments", "quality_regression__synthetic_shared.yaml"),
+    cfg = load_experiment(os.path.join(ROOT, "configs", "experiments", "quality_regression__synthetic_shared_v3.yaml"),
                           [f"output_dir={tmp_path}/runs", f"benchmark.path={tmp_path}/bench", f"benchmark.params.n={n}",
                            "benchmark.params.k=2", f"router.type={router_type}"])
     cfg["baselines"] = ["oracle", "quality_regression"]
@@ -53,10 +53,10 @@ class DynamicPoolRouter(QualityRegressionRouter):
         super().__init__(None, **kw)
 
     def training_models(self):
-        return ["smollm3-3b", "llama-3.2-3b", "phi-4-mini", "mistral-7b-v0.3", "olmo-3-7b", "qwen2.5-7b"]
+        return ["llama-3.2-3b", "gemma-3-4b", "qwen2.5-7b", "llama-3.1-8b", "mistral-nemo-12b", "gemma-3-12b"]
 
     def evaluation_models(self):
-        return ["llama-3.1-8b", "deepseek-r1-distill-llama-8b", "phi-4", "mistral-small-24b", "gemma-3-27b", "qwen2.5-32b"]
+        return ["qwen3-14b", "phi-4", "mistral-small-24b", "gemma-3-27b", "qwen2.5-coder-32b", "qwen3-32b"]
 
     def fit(self, train, val=None):
         SEEN["train_models"], SEEN["val_models"] = list(train.models), list(val.models)
@@ -94,7 +94,7 @@ def test_leaderboard_keeps_dynamic_pool_runs_apart(tmp_path):
     static = json.loads(json.dumps(rec))
     static["training_models"] = None
     table = build_table([rec, static])
-    assert table.count("### ") == 2 and "trained on smollm3-3b" in table
+    assert table.count("### ") == 2 and "trained on llama-3.2-3b" in table
 
 
 class ScoreRouter(BinaryRouter):
@@ -213,7 +213,7 @@ class CheatingRouter(Router):
 
 @pytest.mark.parametrize("cfg,expect", [
     ({"type": "quality_regression", "models": None}, True),
-    ({"type": "random_binary", "models": {"small": "qwen2.5-7b", "large": "qwen2.5-32b"}}, True),
+    ({"type": "random_binary", "models": {"small": "gemma-3-4b", "large": "gemma-3-27b"}}, True),
     ({"type": "_test_dynamic_pool", "models": None}, True),
     ({"type": "_test_reads_test_labels", "models": None}, False),
 ])
@@ -222,7 +222,8 @@ def test_check_router(cfg, expect):
     from llm_routing.contract import check_router
     from llm_routing.data.loaders import prepare
 
-    b = prepare(load_benchmark_config(os.path.join(ROOT, "configs", "benchmarks", "synthetic_shared.yaml"),
+    # the default check-router data: the v3 pool's names, so router configs for shared_v3 run unchanged
+    b = prepare(load_benchmark_config(os.path.join(ROOT, "configs", "benchmarks", "synthetic_shared_v3.yaml"),
                                       ["params.n=600", "params.k=2"]))
     results = check_router(cfg, b)
     assert all(ok for _, ok, _ in results) == expect, results
