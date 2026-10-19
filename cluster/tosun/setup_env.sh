@@ -13,7 +13,7 @@ pip install --upgrade pip
 # index works on any 12.x driver (CUDA minor-version compatibility). Pinned so every member gets the same stack.
 VLLM_VERSION="${VLLM_VERSION:-0.31.0}"; TORCH_CUDA="${TORCH_CUDA:-cu129}"
 pip install torch==2.13.0 torchvision==0.28.0 torchaudio==2.11.0 --index-url "https://download.pytorch.org/whl/$TORCH_CUDA"
-pip install -e ".[gpu,tracking,dev]"
+pip install -e ".[gpu,graph,tracking,dev]"
 pip install "https://github.com/vllm-project/vllm/releases/download/v$VLLM_VERSION/vllm-$VLLM_VERSION%2B$TORCH_CUDA-cp38-abi3-manylinux_2_28_x86_64.whl" \
     --extra-index-url "https://download.pytorch.org/whl/$TORCH_CUDA" \
     || echo "vllm failed to install -- set generation.engine: hf for the affected models"

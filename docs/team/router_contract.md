@@ -37,6 +37,25 @@ Model alt kümesi: bir router `fit` sonrası `evaluation_models()` döndürürse
 router'ı, tek modelleri ve bütün baseline'ları yalnız o modeller üzerinde ölçer
 (UniRoute'un test LLM'leri). Varsayılan `None` = bütün aday modeller.
 
+Eğitim havuzu: router `training_models()` döndürürse (config'ten, `fit`'ten önce belli)
+runner `fit`'e yalnız o modellerin sütunlarını taşıyan train split'ini verir; val bütün
+adayları taşır, çünkü yeni modelleri tanıtan küçük etiketli kümedir. Bu durumda
+baseline'lar yalnız val'de (test havuzu) fit edilir, sonuçta `fit_on: val` yazar ve
+leaderboard bu koşuları statik koşulardan ayrı gruplar.
+
+Modeller hakkında bilgi: `bench.meta["model_info"]` her modelin HF ID'sini, revision'ını
+ve maliyet proxy'sini (parametre, milyar) taşır; release'i değiştirmez, fingerprint'e
+girmez. Makalenin istediği başka sabit bilgi (GraphRouter'ın model/görev açıklamaları)
+router config'inde durur ve kamuya açık model kartlarından yazılır.
+
+Tek operating point: `sweep` tek elemanlı liste döndürebilir (bir GraphRouter senaryosu).
+O durumda AIQ boş kalır; kalite/maliyet noktası raporlanır.
+
+Otomatik kontrol: `llmr check-router configs/routers/<paper>.yaml`, CPU geliştirme
+verisinde (`configs/benchmarks/synthetic_shared.yaml`: ekibin 12 model adı, 7 kaynak,
+0/1 ve token-F1 skorları, k=10) test skor/maliyetleri karıştırılınca ve (dinamik havuzda)
+yeni modellerin train skorları değişince kararların değişmediğini sınar.
+
 `Decision.choice` döndürülen modeli, opsiyonel `sample_index` döndürülen gerçek
 sample'ı gösterir. `Decision.cost` bütün çağrıların toplam ödenmiş maliyetidir.
 Opsiyonel `trace` ileride çağrı/feedback sırasını taşımak içindir; henüz kronolojik

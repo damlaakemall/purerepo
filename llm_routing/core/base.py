@@ -59,6 +59,15 @@ class Router(ABC):
         """Hyperparameters / learned values worth logging (e.g. t* in Hybrid LLM)."""
         return {}
 
+    def training_models(self) -> list[str] | None:
+        """Models whose TRAIN-split labels ``fit`` may read, known before ``fit`` (from the config). None = all.
+
+        A dynamic-pool router (UniRoute) learns from some LLMs only. The runner then passes ``fit`` a
+        train split restricted to these models; val keeps every candidate, because it is the small
+        labelled set used to onboard the new models. Baselines then fit on val only (see runner).
+        """
+        return None
+
     def evaluation_models(self) -> list[str] | None:
         """Models the router may route to at test time, known after ``fit``. None = every candidate.
 

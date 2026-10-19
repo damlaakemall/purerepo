@@ -13,6 +13,10 @@ Two backends:
   learning/experimenting and as a baseline.
 * ``TransformerClassifier`` — the paper's setup (DeBERTa-v3-large, ~300M
   params). Needs ``torch`` + ``transformers``; a GPU is strongly recommended.
+
+``fit`` optionally takes a validation set. The transformer then keeps the epoch with
+the lowest validation BCE (Hybrid LLM §4.1: "use the validation set to choose the
+best checkpoints"); TF-IDF has no epochs and ignores it.
 """
 
 from __future__ import annotations
@@ -24,7 +28,8 @@ import numpy as np
 
 class SoftLabelClassifier(ABC):
     @abstractmethod
-    def fit(self, texts: list[str], soft_labels: np.ndarray) -> "SoftLabelClassifier": ...
+    def fit(self, texts: list[str], soft_labels: np.ndarray, val_texts: list[str] | None = None,
+            val_labels: np.ndarray | None = None) -> "SoftLabelClassifier": ...
 
     @abstractmethod
     def predict_proba(self, texts: list[str]) -> np.ndarray: ...
@@ -46,7 +51,7 @@ class TfidfLogisticClassifier(SoftLabelClassifier):
         self.vectorizer = TfidfVectorizer(max_features=max_features, ngram_range=ngram_range, sublinear_tf=True)
         self.model = LogisticRegression(C=C, max_iter=2000)
 
-    def fit(self, texts, soft_labels):
+    def fit(self, texts, soft_labels, val_texts=None, val_labels=None):
         y = np.clip(np.asarray(soft_labels, dtype=float), 0.0, 1.0)
         X = self.vectorizer.fit_transform(texts)
         from scipy.sparse import vstack
@@ -102,7 +107,7 @@ class TransformerClassifier(SoftLabelClassifier):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name, num_labels=1).to(self.device)
 
-    def fit(self, texts, soft_labels):
+    def fit(self, texts, soft_labels, val_texts=None, val_labels=None):
         import torch
         from transformers import get_linear_schedule_with_warmup
 
@@ -113,6 +118,7 @@ class TransformerClassifier(SoftLabelClassifier):
         sched = get_linear_schedule_with_warmup(opt, int(self.warmup_ratio * steps), steps)
         loss_fn = torch.nn.BCEWithLogitsLoss()  # accepts soft targets directly
         g = np.random.default_rng(self.seed)
+        best, self.best_val_bce_, self.best_epoch_ = None, float("inf"), self.epochs
         self.model.train()
         for epoch in range(self.epochs):
             perm = g.permutation(len(texts))
@@ -127,8 +133,24 @@ class TransformerClassifier(SoftLabelClassifier):
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 opt.step(); sched.step(); opt.zero_grad()
                 total += loss.item() * len(idx)
-            print(f"[TransformerClassifier] epoch {epoch + 1}/{self.epochs} loss={total / len(texts):.4f}")
+            msg = f"[TransformerClassifier] epoch {epoch + 1}/{self.epochs} loss={total / len(texts):.4f}"
+            if val_texts is not None and len(val_texts):
+                val_loss = self.bce(val_texts, val_labels)
+                msg += f" val_bce={val_loss:.4f}"
+                if val_loss < self.best_val_bce_:  # checkpoint selection on val only
+                    self.best_val_bce_, self.best_epoch_ = val_loss, epoch + 1
+                    best = {k: v.detach().cpu().clone() for k, v in self.model.state_dict().items()}
+                self.model.train()
+            print(msg)
+        if best is not None:
+            self.model.load_state_dict(best)
         return self
+
+    def bce(self, texts, soft_labels) -> float:
+        """Soft-label BCE of the current model on ``texts`` (used for checkpoint selection)."""
+        p = np.clip(self.predict_proba(texts), 1e-7, 1 - 1e-7)
+        y = np.clip(np.asarray(soft_labels, dtype=float), 0, 1)
+        return float(-(y * np.log(p) + (1 - y) * np.log(1 - p)).mean())
 
     def predict_proba(self, texts):
         import torch

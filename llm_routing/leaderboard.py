@@ -13,8 +13,10 @@ from collections import defaultdict
 
 import numpy as np
 
-COLUMNS = [("aiq", "AIQ ↑"), ("cost_to_match_reference", "cost to match best ↓"),
-           ("cost_advantage@drop<=1%", "small-model share @≤1% drop ↑"), ("quality_drop_pct@40%", "drop % @40% ↓")]
+COLUMNS = [("aiq", "AIQ ↑"), ("max_quality", "max quality ↑"), ("cost_to_match_reference", "cost to match best ↓"),
+           ("cost_advantage@drop<=1%", "small-model share @≤1% drop, test sweep ↑"),
+           ("test@val_threshold_small_share", "small-model share @ val threshold ↑"),
+           ("test@val_threshold_quality_drop_pct", "drop % @ val threshold ↓"), ("quality_drop_pct@40%", "drop % @40% ↓")]
 
 
 def collect(runs_dir: str = "runs") -> list[dict]:
@@ -28,7 +30,10 @@ def collect(runs_dir: str = "runs") -> list[dict]:
 def build_table(records: list[dict]) -> str:
     groups = defaultdict(lambda: defaultdict(list))  # (bench, fp, models) -> (router label) -> [result]
     for rec in records:
-        key = (rec["benchmark"], rec["fingerprint"], " vs ".join(rec["models"]))
+        pool = " vs ".join(rec["models"])
+        if rec.get("training_models"):  # a dynamic-pool protocol is a different comparison
+            pool += f" (trained on {', '.join(rec['training_models'])})"
+        key = (rec["benchmark"], rec["fingerprint"], pool)
         for r in rec["results"]:
             label = r["router"] + (" (baseline)" if r.get("is_baseline") else "")
             # the same baseline is evaluated by every experiment on this data: count each seed once

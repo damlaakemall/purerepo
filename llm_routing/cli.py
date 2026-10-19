@@ -7,6 +7,7 @@
     llmr push-data | pull-data  configs/benchmarks/X.yaml        share frozen data via Hugging Face Hub
     llmr leaderboard [--runs runs] [--out results/leaderboard.md]
     llmr routers                                                 list registered routers
+    llmr check-router configs/routers/X.yaml [--benchmark B]    fairness/contract checks on CPU dev data
 """
 
 from __future__ import annotations
@@ -39,6 +40,8 @@ def main(argv=None):
     lb = sub.add_parser("leaderboard"); lb.add_argument("--runs", default="runs")
     lb.add_argument("--out", default="results/leaderboard.md")
     sub.add_parser("routers")
+    cr = sub.add_parser("check-router"); cr.add_argument("config"); cr.add_argument("overrides", nargs="*")
+    cr.add_argument("--benchmark", default="configs/benchmarks/synthetic_shared.yaml")
     smoke = sub.add_parser("smoke-pipeline")
     smoke.add_argument("--output", required=True)
     a, extras = p.parse_known_args(argv)
@@ -57,6 +60,10 @@ def main(argv=None):
         from .runner import run_experiment
 
         run_experiment(load_experiment(a.config, a.overrides))
+    elif a.cmd == "check-router":
+        from .contract import run_check
+
+        raise SystemExit(0 if run_check(a.config, a.benchmark, a.overrides) else 1)
     elif a.cmd == "routers":
         from .registry import list_routers
 

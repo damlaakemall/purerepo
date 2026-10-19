@@ -61,6 +61,8 @@ pytest -q                                                            # all tests
 llmr smoke-pipeline --output /tmp/llmr-smoke                         # the whole data pipeline with fake models
 llmr routers                                                         # list the routers
 llmr train configs/experiments/quality_regression__synthetic.yaml    # train a router, seconds, no downloads
+llmr train configs/experiments/quality_regression__synthetic_shared.yaml   # same, on CPU data shaped like the shared release
+llmr check-router configs/routers/quality_regression.yaml           # fairness checks a new router must pass
 llmr train configs/experiments/quality_regression__routerbench.yaml  # same on real data (downloads RouterBench)
 llmr leaderboard                                                     # rebuild results/leaderboard.md
 ```
@@ -84,11 +86,11 @@ python cluster/tosun/inspect_shard.py configs/benchmarks/shared_pilot.yaml <mode
 bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v1.yaml <member> 4           # full run
 ```
 
-Router training on Tosun uses `bash cluster/tosun/submit_train.sh <experiment.yaml> <num_seeds>`. There are
-no `shared_v1` experiment configs yet; they come with the first paper router.
-The [Hybrid LLM, GraphRouter and UniRoute training plan (Türkçe)](docs/team/uc_router_egitim_plani.md)
-maps the papers and reference code to our data, with proposed `shared_v2` experiments and required
-evaluation fixes. These routers are still planned.
+Router training on Tosun uses `bash cluster/tosun/submit_train.sh <experiment.yaml> <num_seeds>`. The only
+shared-data experiments so far are the baseline's (`quality_regression__shared_v1.yaml`, `__shared_v2.yaml`);
+paper routers add theirs. The [Hybrid LLM, GraphRouter and UniRoute training plan (Türkçe)](docs/team/uc_router_egitim_plani.md)
+maps the papers and reference code to our data, with proposed `shared_v2` experiments. The shared evaluation
+pieces they need are in place; the routers themselves are still planned ([how to add one](AGENTS.md#when-adding-a-router)).
 
 ## The shared data (`shared_v1`)
 

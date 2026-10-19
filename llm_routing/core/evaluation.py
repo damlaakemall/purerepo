@@ -10,6 +10,8 @@ Summary numbers (all computed from the curve, so they apply to any router family
 aiq                 Average Improvement in Quality (RouterBench, Hu et al. 2024): area under the
                     router's non-decreasing quality-vs-cost envelope, cost normalized to
                     [cheapest model, most expensive model]. Higher is better.
+                    None for a router with a single operating point: compare its
+                    (cost, quality) point instead.
 quality_at_max_cost quality of the most expensive operating point.
 cost_to_match       lowest cost at which the router reaches the quality of a reference model
                     (default: the best single model), as a fraction of that model's cost.
@@ -98,7 +100,9 @@ def summarize(decisions: list[Decision], bench: Benchmark, reference_model: str 
     ref = reference_model or max(singles, key=lambda m: singles[m][1])
     ref_c, ref_q = singles[ref]
     return {
-        "aiq": aiq(pts, costs.min(), costs.max()),
+        # one operating point (e.g. one GraphRouter scenario) is not a curve: AIQ would extend it flat
+        # over the whole cost range, as if that quality were reachable at every budget
+        "aiq": aiq(pts, costs.min(), costs.max()) if len(pts) > 1 else None,
         "max_quality": float(pts[:, 1].max()),
         "quality_at_max_cost": float(pts[np.argmax(pts[:, 0]), 1]),
         "reference_model": ref,

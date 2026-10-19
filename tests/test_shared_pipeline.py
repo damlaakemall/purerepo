@@ -15,7 +15,7 @@ from llm_routing.core.base import Decision
 from llm_routing.core.evaluation import curve
 from llm_routing.data.benchmark import Benchmark
 from llm_routing.data.loaders import load_benchmark
-from llm_routing.collection.assemble import assemble, frozen_dir, package, validate_release
+from llm_routing.collection.assemble import assemble, frozen_dir, load_view, package, validate_release
 from llm_routing.collection.collect import generate, job_spec, score
 from llm_routing.collection.dataset import build_queries, load_dataset
 from llm_routing.collection.io import digest, read_jsonl, seal, verify, write_json
@@ -396,3 +396,13 @@ def test_reasoning_only_response_scores_zero_gt_and_raw_text_for_reward_models(c
     seen = []
     score(cfg, "tiny", scorer="armorm", evaluator=lambda q, r: (seen.append(r), (0.5, {}))[1])
     assert seen and all(r.startswith("<think>") for r in seen)
+
+
+def test_release_view_carries_model_info_outside_the_fingerprint(smoke):
+    cfg, _ = smoke
+    bench = load_view(cfg)
+    assert bench.meta["model_info"] == {"tiny": {"model_id": "synthetic/tiny", "cost_per_1k_tokens": 1.0},
+                                        "large": {"model_id": "synthetic/large", "cost_per_1k_tokens": 3.0}}
+    before = bench.fingerprint()
+    bench.meta.pop("model_info")
+    assert bench.fingerprint() == before

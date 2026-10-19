@@ -131,8 +131,8 @@ Aynı sebeple sınırdaki `>=`/`>` seçimi önemlidir: `>=` ile iki modelin de d
 Bu seçim 0/1 kaynaklarda label'ları t'den çok daha fazla değiştirir; DECISIONS'a yazılmalı.
 Hedefler aynı BCE loss'la öğrenilir. DeBERTa-v3-large, 5 epoch ve val checkpoint
 seçimi makale tarifidir. CPU TF-IDF varyantı yalnız entegrasyon kontrolü olarak
-ayrı isimle bulunmalı. Mevcut `core/classifiers.py` yeniden kullanılabilir, ancak
-`TransformerClassifier.fit()` şu anda **val/checkpoint seçmiyor**; önce bu eksik tamamlanmalı.
+ayrı isimle bulunmalı. `core/classifiers.py` yeniden kullanılır:
+`TransformerClassifier.fit(texts, y, val_texts, val_labels)` val BCE'si en düşük epoch'u tutar.
 
 Başlangıç çifti önerisi `qwen2.5-7b` / `qwen2.5-32b`: aynı aile, farklı ölçek.
 Bu bir sonuç iddiası değil. Train kalite ve maliyetleriyle çiftin anlamlı olduğu
@@ -146,6 +146,8 @@ göre seçilip dondurulmalı. Mevcut `BinaryRouter.sweep()` test **tahminlerinin
 kullanarak betimsel eğri çiziyor; bu test etiketiyle eğitim değildir, fakat önceden
 kalibre edilmiş bir dağıtım eşiği de değildir. `binary_metrics()` test eğrisinden
 `drop<=1%` noktasını seçiyor; bu alanı val'de seçilmiş eşik garantisi diye sunamayız.
+Dağıtım eşiği runner'da hazır: `BinaryRouter` için eşik val'de (en çok küçük model payı,
+kalite kaybı ≤ %1, Ek A) seçilir ve test'e bir kez uygulanır (`test@val_threshold_*`).
 
 Rapor: küçük model trafik payı, all-large'a göre kalite farkı ve gerçek token-proxy
 maliyeti. Küçük modele %40 trafik göndermek, token maliyetinde %40 tasarruf anlamına
@@ -212,9 +214,9 @@ göre ilk modeli seçme davranışı özellikle GT'de raporlanmalı ve test edil
 Çıkarım `argmax(edge_score)` yapar. Bu skor beklenen kalite değildir.
 `MultiModelRouter.predict_quality()` üzerinden yeniden `score - λ*cost` yapmak
 maliyeti ikinci defa ekler. `sweep()` bir senaryo için tek `Decision` döndürebilir;
-üç senaryo ayrı kayıt/çalışma noktasıdır. Mevcut `aiq()` tek noktayı maliyet aralığının
-iki ucuna da sabit kaliteyle uzatıyor; bu, o kalitenin daha düşük bütçelerde erişilebilir
-olduğunu göstermez. Tek noktalı native deneyde AIQ karşılaştırması yerine
+üç senaryo ayrı kayıt/çalışma noktasıdır. `aiq()` tek noktayı maliyet aralığının iki
+ucuna sabit kaliteyle uzatırdı; bu yüzden tek operating point'te `summarize()` artık AIQ'yu
+boş (`None`) bırakıyor. Tek noktalı native deneyde AIQ karşılaştırması yerine
 reward/kalite/maliyet tablosu kullanılmalı; ilave eğitim ağırlıklarıyla eğri üretmek
 sonradan açıkça tanımlanabilir.
 
@@ -283,13 +285,12 @@ ortalaması**; bu bir uygulama tercihidir ve boş-küme sayısı raporlanır. Mo
 hiç etiketi yoksa train'e veya başka kalite kanalına dönmek yerine deney açıkça durmalı.
 Yeni model için train maliyet ortalaması da kullanılmaz; `cost_hat(H_new)` val'den.
 
-`evaluation_models()` ile `H_new` döndürmek mevcut runner'da var, fakat tek başına
-yeterli değil: runner'ın `complete_cohort()` adımı fit öncesinde bütün model sütunlarına
-bakıyor ve baseline `.fit(train, val)` hâlâ yeni modellerin train etiketlerini alabiliyor.
-UniRoute protokolü cohort filtresinden **önce** uygulanmalı: öğrenim girdisi sadece
-`H_train`, tanıtım girdisi val, test havuzu `H_new`. Baseline'lar da aynı bilgi sınırına
-uymalı. Gerekirse küçük bir eğitim-modeli/protokol hook'u eklenir; her router'a yeni
-bir eğitim altyapısı kurulmaz.
+Runner bu bilgi sınırını uyguluyor: router `training_models()` ile `H_train`'i,
+`evaluation_models()` ile `H_new`'i döndürür. `fit` yalnız `H_train` sütunlu train'i ve
+bütün modelli val'i alır; train cohort'u yalnız `H_train`'e, test cohort'u yalnız `H_new`'e
+bakar. Baseline'lar bu durumda yalnız val'de (test havuzu) fit edilir ve sonuçta
+`fit_on: val` yazar. `llmr check-router` yeni modellerin train skorları değişince kararın
+değişmediğini sınar.
 
 Adil dinamik baseline'lar: val profiline dayalı sabit model/Pareto-random ve **val
 bankalı kNN**. Quality regression eklenirse `H_new` için sadece tanıtım verisiyle eğitilen
@@ -307,16 +308,22 @@ olması bu giderin sıfır olduğu anlamına gelmez.
 
 ## 7. Mevcut altyapıda gereken sınırlı değişiklikler
 
-| yer | yapılacak iş |
-|---|---|
-| `core/classifiers.py` | Hybrid için val loss/checkpoint seçimi; CPU API'sini koru |
-| `registry.py` | üç paketi kaydet; ağır bağımlılıkları yalnız ilgili router'da yükle |
-| `runner.py` | UniRoute bilgi sınırlarını cohort/baseline fit öncesinde uygula; val'de sabitlenen operating point'i ayrı kaydet |
-| `core/evaluation.py` ve sonuç kaydı | GraphRouter tek noktasını destekle; kaynak bazında/macro sonuç ve cohort hash'i ekle |
-| `leaderboard.py` | mevcut fingerprint+model gruplamasına protokol/cohort kimliğini ekle; native GraphRouter senaryolarını ayrı göster |
-| `configs/routers/` ve `configs/experiments/` | CPU smoke ile gerçek encoder config'lerini ayır; metric/model ayrımı isimde ve manifestte açık olsun |
-| `docs/papers/` | şablondan üç explainer; yöntem, native ölçüt, veri uyarlaması ve sonuç |
-| `docs/walkthrough/` | eğitim adımı tamamlanınca tek Türkçe yazı, gerçek Tosun komut/sayıları |
+Ortak kısımlar 19 Ekim 2026'da eklendi ("hazır" satırları). Kalanlar router'ın kendi paketinde yapılır.
+
+| yer | iş | durum |
+|---|---|---|
+| `core/classifiers.py` | Hybrid için val BCE ile checkpoint seçimi (`fit(..., val_texts, val_labels)`), CPU API korunur | hazır |
+| `runner.py` | `Router.training_models()`: train split'i cohort'tan önce o modellere daraltılır; test cohort'u test havuzu belli olduktan sonra; dinamik havuzda baseline'lar yalnız val'de fit | hazır |
+| `runner.py` | `BinaryRouter` için val'de seçilip test'e bir kez uygulanan eşik (`test@val_threshold_*`) | hazır |
+| `core/evaluation.py` | tek operating point'te AIQ boş (`None`); kalite/maliyet noktası raporlanır | hazır |
+| `leaderboard.py` | eğitim havuzu farklı koşular ayrı grupta; val eşiği sütunları | hazır |
+| `collection/assemble.py` | `meta["model_info"]`: model ID, revision, parametre/maliyet (GraphRouter model açıklamaları için) | hazır |
+| `core/embeddings.py`, `core/labels.py` | dondurulmuş encoder ile embedding (+cache); label manifesti | hazır |
+| `llmr check-router` | test etiketi/maliyeti, dinamik havuz ve `describe()` kontrolü, CPU'da saniyeler | hazır |
+| `registry.py` | üç paketi kaydet; ağır bağımlılıkları yalnız ilgili router'da yükle | router ile |
+| kaynak bazında/macro sonuç, paper-native ölçütler (GraphRouter reward, UniRoute QNC/Area) | router paketinde veya runner'a küçük ek | router ile |
+| `configs/routers/`, `configs/experiments/` | CPU varyantı ile makale config'i ayrı; `synthetic_shared` ve `shared_v2` deneyleri | router ile |
+| `docs/papers/`, `docs/walkthrough/` | explainer; eğitim bitince tek Türkçe yazı | router ile |
 
 Genel `fit(train, val)` ve `Decision` sözleşmesi korunur. Test gerçek maliyetiyle
 `Decision.cost` yazmak muhasebedir; aynı maliyetin seçimden önce argmax girdisi olması

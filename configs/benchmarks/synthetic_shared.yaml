@@ -1,0 +1,27 @@
+# CPU-only toy data shaped like a shared_v1 ground-truth view, for building routers before Tosun data exists:
+# 7 sources (5 binary 0/1, 2 continuous in [0, 1]), 12 models, k=10 samples, 60/10/30 split, 0.5% missing cells.
+name: synthetic_shared
+loader: synthetic
+path: ${oc.env:LLMR_DATA_ROOT,data}/benchmarks/synthetic_shared
+params:
+  n: 3000
+  k: 10
+  seed: 0
+  noise: 0.35
+  missing_rate: 0.005
+  splits: {train: 0.6, val: 0.1, test: 0.3}
+  sources: {gsm8k: binary, mmlu_pro: binary, bbh: binary, olympiadbench: binary, mbpp: binary,
+            alpaca: continuous, multi_news: continuous}
+  models:            # name: [difficulty slope, offset, cost]; the team pool's names and parameter counts,
+    smollm3-3b: [2.4, 0.3, 3]                 # so router configs written for shared_v2 run here unchanged.
+    llama-3.2-3b: [2.3, 0.3, 3]               # The qualities are invented: nothing here says how the
+    phi-4-mini: [2.2, 0.2, 4]                 # real models compare.
+    mistral-7b-v0.3: [1.9, 0.2, 7]
+    olmo-3-7b: [1.8, 0.1, 7]
+    qwen2.5-7b: [1.7, 0.1, 8]
+    llama-3.1-8b: [1.7, 0.2, 8]
+    deepseek-r1-distill-llama-8b: [1.5, 0.3, 8]
+    phi-4: [1.2, 0.0, 15]
+    mistral-small-24b: [0.9, 0.1, 24]
+    gemma-3-27b: [0.8, 0.0, 27]
+    qwen2.5-32b: [0.7, 0.0, 32]

@@ -11,10 +11,11 @@ Together these points form the router's **quality–cost curve**, which is plott
 
 | metric | definition | better |
 |---|---|---|
-| **AIQ** | Average Improvement in Quality (RouterBench): area under the router's non-decreasing quality-vs-cost curve, with cost normalized over [cheapest, most expensive] model | ↑ |
+| **AIQ** | Average Improvement in Quality (RouterBench): area under the router's non-decreasing quality-vs-cost curve, with cost normalized over [cheapest, most expensive] model. Empty for a router with one operating point (a single point is not a curve) | ↑ |
 | **cost to match best** | lowest cost at which the router reaches the best single model's quality, divided by that model's cost. Values below 1 mean savings; ∞ means it never reaches that quality | ↓ |
 | **max quality** | best quality at any operating point. It can exceed every single model | ↑ |
-| **small-model share @ ≤1% drop** *(binary)* | Hybrid LLM's headline number: the largest fraction of queries sent to the small model while quality stays within 1% of all-large | ↑ |
+| **small-model share @ ≤1% drop** *(binary)* | Hybrid LLM's headline number: the largest fraction of queries sent to the small model while quality stays within 1% of all-large. Read off the test sweep, so it is descriptive, not a deployable threshold | ↑ |
+| **small-model share / drop @ val threshold** *(binary)* | the deployable version (Hybrid LLM App. A): the threshold is chosen on val (most traffic to the small model with ≤1% drop), frozen, and applied once to test | ↑ / ↓ |
 | **quality drop @ X%** *(binary)* | quality loss relative to all-large when X% of queries go to the small model | ↓ |
 
 ## Reference lines

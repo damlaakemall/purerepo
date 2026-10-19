@@ -12,7 +12,7 @@ A **learning project** at Sabancı University. The team re-implements LLM routin
 
 | path | what |
 |---|---|
-| `llm_routing/core/` | `Router` base classes and contract (`base.py`), evaluation metrics (AIQ, …), reusable text classifiers |
+| `llm_routing/core/` | `Router` base classes and contract (`base.py`), evaluation metrics (AIQ, …), reusable text classifiers (`classifiers.py`), frozen query embeddings (`embeddings.py`), label manifest (`labels.py`) |
 | `llm_routing/routers/` | one folder per paper + `baselines.py`. Only the quality-regression baseline exists today; paper routers are planned (list in [DECISIONS.md](DECISIONS.md)) |
 | `llm_routing/data/` | the shared `Benchmark` format (`benchmark.py`) and loaders for synthetic / MixInstruct / RouterBench |
 | `llm_routing/collection/` | `shared_v1` data collection: frozen queries and splits → per-member generation → scoring → contribution bundles → assembled release |
@@ -20,7 +20,8 @@ A **learning project** at Sabancı University. The team re-implements LLM routin
 | `llm_routing/collection/collect.py` | `shared_v1` generation and the three scoring channels: `ArmoRM`, `BARTScore` (the reference repo's definition), ground truth via `llm_routing/ground_truth`; `answer_text` strips reasoning traces |
 | `llm_routing/legacy_pipeline/` | older single-user pipeline (`ours_v1`); not used for team data. Its `scorers.py` `bartscore` is the paper's reference-based variant, not the `shared_v1` channel |
 | `llm_routing/runner.py`, `cli.py` | the single train + evaluate procedure, and the `llmr` command |
-| `configs/` | `benchmarks/` (`shared_v1.yaml` is the main one), `model_pools/team.yaml` (12 models), `routers/`, `experiments/` |
+| `llm_routing/contract.py` | `llmr check-router`: the fairness checks every router must pass (test labels unused, dynamic-pool boundary, valid decisions) |
+| `configs/` | `benchmarks/` (`shared_v1.yaml`, `shared_v2.yaml` for the real data; `synthetic_shared.yaml` = CPU data of the same shape, for development), `model_pools/team.yaml` (12 models), `routers/`, `experiments/` |
 | `cluster/tosun/` | SLURM scripts for Tosun; start with its README. `team.yaml`: which of the 3 members collects which 4 models |
 | `docs/concepts/` | routing fundamentals, comparison, benchmarks, evaluation metrics (English) |
 | `docs/team/` | team workflow, `shared_v1` data protocol, router contract (Turkish) |
@@ -38,6 +39,7 @@ pytest -q                                                   # all tests, CPU, ~s
 llmr smoke-pipeline --output /tmp/llmr-smoke                # whole shared-v1 pipeline with test doubles (use a fresh path each time)
 llmr train configs/experiments/quality_regression__synthetic.yaml   # CPU router training smoke run
 llmr routers                                                # registered routers
+llmr check-router configs/routers/<router>.yaml             # fairness checks for one router, CPU, seconds
 ```
 
 CI (`.github/workflows/`) runs these three. Real generation and scoring only run on Tosun GPUs:
@@ -68,4 +70,45 @@ numbers. Fix any doc the step made stale.
 
 ## When adding a router
 
-Follow [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/team/router_contract.md](docs/team/router_contract.md): package in `llm_routing/routers/<paper>/`, register it, add configs, an explainer from `docs/papers/_template.md`, and tests. An explanatory notebook in `notebooks/<paper>.ipynb` is welcome. It must import the router module, not copy it.
+Team members implement papers with their own coding agents. If that is you, this section is your task definition.
+Details: [CONTRIBUTING.md](CONTRIBUTING.md#add-a-router) and [docs/team/router_contract.md](docs/team/router_contract.md).
+For Hybrid LLM, GraphRouter and UniRoute, read [docs/team/uc_router_egitim_plani.md](docs/team/uc_router_egitim_plani.md)
+first: it lists what to keep from the paper and official code and which reference-repo behaviours not to copy.
+
+**Before writing code.** Open decisions for the paper are listed in [DECISIONS.md](DECISIONS.md) under "Open"
+(e.g. GraphRouter: paper vs. official code). Do not settle them yourself: ask the person you work for, and record the
+answer under "Decided" before relying on it. Pin the paper revision and the official code commit you follow.
+
+**What to build.**
+1. `llm_routing/routers/<paper>/`: `labels.py` (the paper's training targets from train/val scores) and `router.py`
+   (`@register_router("<paper>")`), plus a line in `ROUTER_MODULES` in `llm_routing/registry.py`. Pick the base class
+   in `core/base.py` that matches the paper's decision rule; subclass `Router` directly if none does. Comment each step
+   with the paper's section/equation. Import `torch`, `transformers`, `torch_geometric` inside functions.
+2. Reuse, do not rewrite: `core/classifiers.py` (soft-label text classifier, val checkpoint), `core/embeddings.py`
+   (frozen encoder, any model/pooling, cache), `core/labels.py` (`label_manifest` in `describe()`).
+3. What the data gives you: `bench.scores[N, M, k]` (one quality channel), `bench.costs[N, M]` (sample 0),
+   `bench.sources`, `bench.extras` (`sample_cost`, `completion_tokens`, `seconds`, other channels),
+   `bench.meta["model_info"]` (model ID, revision, cost proxy). Static knowledge the paper needs about models or
+   tasks (e.g. GraphRouter's descriptions) goes in the router config, written from public model cards, never from
+   results. A model subset (Hybrid's pair) is the router config's `models`. Train on some models and test on others
+   (UniRoute): return them from `training_models()` and `evaluation_models()`; the runner enforces the boundary.
+   One operating point per run (a GraphRouter scenario): return a one-element list from `sweep`.
+   If the paper truly needs data the release lacks (another channel, more samples, other models), stop and ask:
+   that is a new benchmark version (rule 2), not a change inside a router.
+4. Configs: `configs/routers/<paper>.yaml` (a fast CPU variant, named as such) and `<paper>_<encoder>.yaml` (the
+   paper's setup); experiments `configs/experiments/<paper>__synthetic_shared.yaml` and `<paper>__shared_v2.yaml`
+   (copy the `quality_regression__*` ones). Router configs name real team models, so they run on both.
+5. Tests in `tests/test_<paper>.py`: labels on a hand-computable example, the paper-specific leakage checks from the
+   plan, and the router in `test_check_router` in `tests/test_router_infra.py`.
+6. `docs/papers/<paper>.md` from `docs/papers/_template.md`, with a "paper vs. ours" table of every deviation.
+
+**Done means** all of these pass, and their output is shown in the PR:
+
+```bash
+pytest -q
+llmr check-router configs/routers/<paper>.yaml
+llmr train configs/experiments/<paper>__synthetic_shared.yaml
+```
+
+The real run waits for the shared release: `bash cluster/tosun/submit_train.sh configs/experiments/<paper>__shared_v2.yaml 3`.
+An explanatory notebook in `notebooks/<paper>.ipynb` is welcome. It must import the router module, not copy it.

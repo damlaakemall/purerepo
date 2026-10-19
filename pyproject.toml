@@ -18,6 +18,8 @@ dependencies = [
 
 [project.optional-dependencies]
 gpu = ["torch", "transformers>=4.57", "tokenizers>=0.22", "sentencepiece", "protobuf", "accelerate"]
+# GraphRouter's GNN (torch_geometric.nn.GeneralConv); install with .[gpu,graph]
+graph = ["torch_geometric"]
 tracking = ["wandb"]
 vllm = ["vllm"]
 dev = ["pytest"]

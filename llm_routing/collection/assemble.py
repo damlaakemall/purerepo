@@ -309,6 +309,12 @@ def validate_release(path):
     return man
 
 
+def model_info(models):
+    """name -> HF model ID, revision and cost proxy per 1k tokens (= parameters in billions)."""
+    keys = ("model_id", "revision", "cost_per_1k_tokens")
+    return {name: {k: spec[k] for k in keys if k in spec} for name, spec in models.items()}
+
+
 def load_view(cfg, with_responses=False):
     target = frozen_dir(cfg)
     man = verify(target, ("long.parquet", "wide.parquet", "config.json"))
@@ -319,6 +325,9 @@ def load_view(cfg, with_responses=False):
     if metric not in available:
         raise ValueError(f"quality_metric must be one of this release's channels {available}")
     bench = Benchmark.load(str(target / "views" / metric))
+    # Static facts about each model, from the pinned pool the release was built with (config_hash
+    # checked above), for routers that describe models (GraphRouter's LLM nodes). Not in the fingerprint.
+    bench.meta["model_info"] = model_info(model_pool(cfg))
     if with_responses:
         # Text lives once in the canonical long view, rather than duplicated in both metric views.
         models = model_pool(cfg)

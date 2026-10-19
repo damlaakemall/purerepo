@@ -11,6 +11,11 @@ A log of team decisions that shape the comparison. **Check "Open" before the fir
 | 5 | **Shared accounts** | HF Hub dataset repo name (`hub_repo:` in benchmark configs, private) and W&B entity/project for the team. | sharing data / runs |
 | 6 | **GPU types for the large models** | `mistral-small-24b`, `gemma-3-27b` and `qwen2.5-32b` are set to `gpus: 2` (tensor parallel); `phi-4` needs a >= 40 GB card. Tosun (2026-10-15): the only node with two identical large cards is cn21 (2 × RTX PRO 6000 96 GB); one A100 80 GB, RTX PRO 6000 96 GB or H200 141 GB fits each of these models alone. Likely `gpus: 1` with `LLMR_GPU_TYPE` set to a large card. | generating the large models |
 | 7 | **Token limit for the reasoning model** | Pilot (2026-10-15): with `max_new_tokens: 4096`, DeepSeek-R1-Distill-Llama 8B was cut off mid-thought on 6 of 8 OlympiadBench samples (scored 0, `no_answer`). Keep 4096 for every model (same protocol, reasoning cost shows up as truncation) or raise it for this model (more GPU time; per-model `generation.max_new_tokens`). | generating `deepseek-r1-distill-llama-8b` |
+| 8 | **Who implements which paper** | Hybrid LLM, GraphRouter, UniRoute first (plan: `docs/team/uc_router_egitim_plani.md`), one owner each. | starting the routers |
+| 9 | **Training data for the first router runs** | `shared_v2` (plan's proposal) or `shared_v1`; the two never mix in one comparison. Quality channel: ground truth (plan's proposal), ArmoRM/BARTScore as separate experiments. | every router config |
+| 10 | **Hybrid LLM labels** | Model pair (proposal: `qwen2.5-7b` / `qwen2.5-32b`, fixed before test is opened); tie rule `Δ >= -t` or `> -t` (on 0/1 GT this decides whether "both right" counts as easy); same-index sample pairs or all 10×10 pairs. `r_trans` equals `r_prob` on 0/1 sources, so both run. | `hybrid_llm` |
+| 11 | **GraphRouter: paper or official code** | Paper: GAT, 32-d, Adam lr 1e-3 → 0, task nodes, quality and cost normalized. Official code (`0edfb87`): two `GeneralConv`, 16-d, AdamW 3e-4, task embedding concatenated, only cost min-maxed per task. Train-only or train+val edges visible at inference. | `graphrouter` |
+| 12 | **UniRoute pool split** | 6 training + 6 new models, fixed list or `pool_seed`, chosen before test is opened; encoder (proposal: `BAAI/bge-base-en-v1.5`, an open stand-in for Gecko). | `uniroute` |
 
 ## Decided
 

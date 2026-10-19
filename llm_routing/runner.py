@@ -1,10 +1,13 @@
 """Train + evaluate one experiment config. Same procedure for every router -> fair comparison.
 
 1. load the frozen benchmark (same files for everyone, fingerprint recorded)
-2. restrict it to the router's candidate models (binary: small+large; multi: its list or all)
+2. restrict it to the router's candidate models (binary: small+large; multi: its list or all);
+   a router's ``training_models()`` further restricts the TRAIN split it may read (UniRoute)
 3. fit on the TRAIN split (VAL available for tuning); never touch TEST while fitting
-4. sweep the router's knob on TEST -> quality/cost curve -> summary metrics
+4. sweep the router's knob on TEST -> quality/cost curve -> summary metrics; a binary router also
+   gets the threshold chosen on VAL, applied once to TEST (Hybrid LLM App. A)
 5. evaluate the configured baselines on exactly the same candidate models and split
+   (on a dynamic pool they fit on VAL only: they may not see the new models' TRAIN labels)
 6. write runs/<benchmark>/<experiment>/<timestamp>_s<seed>/ and log to W&B
 """
 
@@ -61,11 +64,44 @@ def binary_metrics(decisions, test, small_idx: int, large_idx: int) -> dict:
     return out
 
 
-def evaluate_router(router: Router, test, num_points: int = 51) -> tuple[dict, list[dict]]:
+def _share_and_drop(to_small: np.ndarray, bench, small: str, large: str) -> tuple[float, float]:
+    q = bench.realized()
+    i, j = bench.model_index(small), bench.model_index(large)
+    base = float(q[:, j].mean())
+    routed = float(np.where(to_small, q[:, i], q[:, j]).mean())
+    drop = (base - routed) / abs(base) * 100 if base != 0 else float("nan")  # undefined if all-large scores 0
+    return float(to_small.mean()), drop
+
+
+def val_threshold_metrics(router: BinaryRouter, val, test, max_drop_pct: float = 1.0) -> dict:
+    """Hybrid LLM App. A: pick the threshold on VAL with the most traffic to the small model while the
+    quality drop stays <= ``max_drop_pct``, freeze it, then report what it does on TEST.
+
+    The test sweep above is descriptive (its thresholds are test-score quantiles); this is the
+    deployable operating point. Test labels never choose the threshold.
+    """
+    s = np.asarray(router.score(val.queries), dtype=float)
+    best_t, best_share = np.inf, 0.0
+    for t in np.unique(s):
+        share, drop = _share_and_drop(s >= t, val, router.small, router.large)
+        if np.isfinite(drop) and drop <= max_drop_pct and share > best_share:
+            best_t, best_share = float(t), share
+    val_share, val_drop = _share_and_drop(s >= best_t, val, router.small, router.large)
+    to_small = router.route(test.queries, best_t)
+    test_share, test_drop = _share_and_drop(to_small, test, router.small, router.large)
+    choice = np.where(to_small, test.model_index(router.small), test.model_index(router.large))
+    return {"val_threshold": best_t, "val_small_share": val_share, "val_quality_drop_pct": val_drop,
+            "test@val_threshold_small_share": test_share, "test@val_threshold_quality_drop_pct": test_drop,
+            "test@val_threshold_cost": float(test.costs[np.arange(len(test)), choice].mean())}
+
+
+def evaluate_router(router: Router, test, num_points: int = 51, val=None) -> tuple[dict, list[dict]]:
     decisions = router.sweep(test, num_points)
     m = summarize(decisions, test)
     if isinstance(router, BinaryRouter):
         m.update(binary_metrics(decisions, test, test.model_index(router.small), test.model_index(router.large)))
+        if val is not None and len(val):
+            m.update(val_threshold_metrics(router, val, test))
     pts = curve(decisions, test)
     rows = [{"router": router.name, "knob": d.knob, "cost": float(c), "quality": float(q)}
             for d, (c, q) in zip(decisions, pts)]
@@ -80,15 +116,24 @@ def run_experiment(cfg: dict) -> dict:
     models = candidate_models(router, bench)
     sub = bench.select_models(models)
     train, val, test = sub.split("train"), sub.split("val"), sub.split("test")
+    train_models = router.training_models()
+    if train_models:  # dynamic pool: fit may not read the other models' TRAIN labels
+        if not set(train_models) <= set(models):
+            raise ValueError(f"training models {train_models} are not candidates {models}")
+        train = train.select_models(list(train_models))
+    # a fixed complete-case cohort per split; incomplete rows are reported, never silently dropped
+    # from one model's average. Test is restricted after fit, once the router's test pool is known.
+    use_cohort = bench.meta.get("protocol") == "shared-v1" or bool(np.isnan(bench.realized()).any())
     coverage = None
-    if bench.meta.get("protocol") == "shared-v1":
+    if use_cohort:
         from .collection.evaluate import complete_cohort
-        before = {s: len(sub.split(s)) for s in ("train", "val", "test")}
-        train, val, test = (complete_cohort(b) for b in (train, val, test))
+        before = {"train": len(train), "val": len(val)}
+        train, val = complete_cohort(train), complete_cohort(val)
         coverage = {s: {"available": before[s], "scored": len(b), "query_ids": b.query_ids}
-                    for s, b in zip(("train", "val", "test"), (train, val, test))}
+                    for s, b in (("train", train), ("val", val))}
     print(f"[run] {cfg['name']}  benchmark={bench.name} ({fp})  models={models}  "
-          f"train/val/test={len(train)}/{len(val)}/{len(test)}")
+          f"train/val/test={len(train)}/{len(val)}/{len(test)}"
+          + (f"  training models={list(train_models)}" if train_models else ""))
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
     run_dir = os.path.join(cfg["output_dir"], bench.name, cfg["name"], f"{stamp}_s{cfg['seed']}")
@@ -105,9 +150,15 @@ def run_experiment(cfg: dict) -> dict:
             raise ValueError(f"evaluation models {eval_models} are not candidates {models}")
         models, test = list(eval_models), test.select_models(list(eval_models))
         print(f"[run] evaluating on the router's test pool: {models}")
+    if use_cohort:
+        before = len(test)
+        test = complete_cohort(test)
+        coverage["test"] = {"available": before, "scored": len(test), "query_ids": test.query_ids}
+        print(f"[run] complete-case test cohort: {len(test)} of {before} queries")
+    eval_val = val.select_models(models)
 
     results, curve_rows = [], []
-    m, rows = evaluate_router(router, test)
+    m, rows = evaluate_router(router, test, val=eval_val)
     results.append({"router": router.name, "type": cfg["router"]["type"], "family": router.family,
                     "is_baseline": False, "fit_seconds": fit_seconds, **m, "learned": router.describe()})
     curve_rows += rows
@@ -118,15 +169,20 @@ def run_experiment(cfg: dict) -> dict:
         elif b == "random_binary" and not isinstance(router, BinaryRouter):
             print("[run] skipping random_binary baseline: router is not binary")
             continue
-        br = build_router(bcfg, seed=cfg["seed"]).fit(train, val)
-        bm, brows = evaluate_router(br, test)
-        results.append({"router": br.name, "type": b, "family": br.family, "is_baseline": True, **bm})
+        br = build_router(bcfg, seed=cfg["seed"])
+        if train_models:  # same information as the router: the test pool's labels on VAL only
+            br.fit(eval_val, None)
+        else:
+            br.fit(train, val)
+        bm, brows = evaluate_router(br, test, val=eval_val)
+        results.append({"router": br.name, "type": b, "family": br.family, "is_baseline": True,
+                        "fit_on": "val" if train_models else "train", **bm})
         curve_rows += brows
 
     singles = single_model_points(test)
     record = {"experiment": cfg["name"], "benchmark": bench.name, "fingerprint": fp, "seed": cfg["seed"],
               "quality_metric": bench.meta.get("metric"), "cost_unit": bench.meta.get("cost_unit"),
-              "coverage": coverage, "models": models, "num_test": len(test), "num_train": len(train),
+              "coverage": coverage, "models": models, "training_models": train_models, "num_test": len(test), "num_train": len(train),
               "single_models": {k: {"cost": c, "quality": q} for k, (c, q) in singles.items()},
               "oracle_point": dict(zip(("cost", "quality"), oracle_point(test))), "results": results,
               "run_dir": run_dir}
