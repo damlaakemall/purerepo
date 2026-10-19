@@ -16,7 +16,8 @@ Mistral-Small-24B, Llama3.1-8B, Qwen2.5-7B). Herkes kendi gated modellerinin lis
 ## 0. Üç kişiyiz: kim ne yapar
 
 12 model üç kişiye dörder dörder dağıtıldı. Atamaların tek kaynağı
-[`cluster/tosun/team.yaml`](../../cluster/tosun/team.yaml) dosyasıdır.
+[`cluster/tosun/team.yaml`](../../cluster/tosun/team.yaml) dosyasıdır; `tests/test_configs.py` her modelin
+tam bir üyeye atandığını kontrol eder.
 
 | kişi | `--member` | modeller | toplam |
 |---|---|---|---|

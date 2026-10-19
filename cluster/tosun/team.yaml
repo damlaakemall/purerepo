@@ -1,5 +1,6 @@
 # Who collects which model for shared_v1 on Tosun. Three members, four models each.
-# `submit_my_models.sh CONFIG MEMBER` reads this file.
+# `submit_my_models.sh CONFIG MEMBER` reads this file; tests/test_configs.py checks that every model of
+# the pool is assigned to exactly one member.
 #
 # The split: one large (2-GPU) model per member, and the parameter sum per member (a rough proxy for GPU
 # time) kept close: 51.1B / 46.2B / 49.4B. The three gated models (both Llamas, Gemma) are with one member,

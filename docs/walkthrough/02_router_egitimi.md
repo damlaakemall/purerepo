@@ -154,6 +154,12 @@ eksik skorlar, donmuş veri bütünlüğü, maliyet hesabı ve uçtan uca akış
 korundu. Yerel CPU'da `.venv/bin/pytest -q` çalıştırıldı: **96 geçti, 11.56 saniye**.
 Yukarıdaki 97/110 sayıları önceki hazırlık koşularının tarihsel kaydıdır.
 
+Sadeleştirmeden sonra iki tutarlılık kontrolü sade haliyle geri eklendi
+(`tests/test_configs.py`). Bunlar listeleri kopyalamaz, dosyaları birbirine göre denetler:
+ekip dosyası her havuz modelini tam bir üyeye atamalı (yoksa eksik model ancak GPU işinden
+sonra, birleştirmede ortaya çıkar) ve her deney config'i yüklenebilmeli (gerçek release
+isteyen deneyler CI'da eğitilemez). Yerel CPU'da `.venv/bin/pytest -q`: **98 geçti**.
+
 ## Sırada ne var?
 
 Veri tamamlanınca aynı loader, seçilen kalite görünümünü donmuş release'ten okuyacak;
