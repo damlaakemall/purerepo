@@ -226,3 +226,90 @@ def test_check_router(cfg, expect):
                                       ["params.n=600", "params.k=2"]))
     results = check_router(cfg, b)
     assert all(ok for _, ok, _ in results) == expect, results
+
+
+@register_router("_test_reads_extra_labels")
+class ExtraLabelsRouter(Router):
+    def __init__(self, models=None, **_):
+        pass
+
+    def sweep(self, bench, num=51):
+        pick = bench.extras["armorm"][:, :, 0].argmax(1)
+        return [Decision(0.0, pick, bench.costs[np.arange(len(bench)), pick])]
+
+
+@register_router("_test_numpy_description")
+class NumpyDescriptionRouter(Router):
+    def __init__(self, models=None, **_):
+        pass
+
+    def sweep(self, bench, num=51):
+        return [Decision(0.0, np.zeros(len(bench), dtype=int), bench.costs[:, 0])]
+
+    def describe(self):
+        return {"profile": np.array([0.1, 0.2])}
+
+
+def test_check_router_rejects_extra_channel_leak_and_numpy_description():
+    from llm_routing.contract import check_router
+
+    bench = shared_like()
+    bench.extras["armorm"] = np.random.default_rng(4).random(bench.scores.shape).astype(np.float32)
+    results = {name: ok for name, ok, _ in check_router({"type": "_test_reads_extra_labels"}, bench)}
+    assert results["decisions"] and not results["no test labels"]
+    results = {name: ok for name, ok, _ in check_router({"type": "_test_numpy_description"}, bench)}
+    assert results["decisions"] and not results["describe"]
+
+
+def test_checker_and_runner_use_the_same_dynamic_cohorts(tmp_path):
+    from llm_routing.contract import check_router
+    from llm_routing.data.benchmark import Benchmark
+
+    cfg = _experiment(tmp_path, "_test_dynamic_pool")
+    from llm_routing.data.loaders import prepare
+    bench = prepare(cfg["benchmark"])
+    train_models = DynamicPoolRouter().training_models()
+    new_models = DynamicPoolRouter().evaluation_models()
+    old = [bench.model_index(m) for m in train_models]
+    new = [bench.model_index(m) for m in new_models]
+    # Neither the fit cohort nor its cost estimates may depend on hidden train cells.
+    for values in (bench.scores, bench.costs, *bench.extras.values()):
+        values[np.ix_(bench.split_of == "train", new)] = np.nan
+        values[np.ix_(bench.split_of == "test", old)] = np.nan
+    bench.save(cfg["benchmark"]["path"])
+    results = check_router({"type": "_test_dynamic_pool"}, Benchmark.load(cfg["benchmark"]["path"]))
+    assert all(ok for _, ok, _ in results), results
+    rec = run_experiment(cfg)
+    assert rec["num_test"] > 0
+    assert rec["models"] == new_models
+    assert all(rec["coverage"][s]["cohort_hash"] for s in ("train", "val", "test"))
+
+
+def test_leaderboard_separates_different_cohorts():
+    from llm_routing.leaderboard import build_table
+
+    base = {"benchmark": "b", "fingerprint": "fp", "models": ["m"], "seed": 0,
+            "results": [{"router": "r", "aiq": 0.5}],
+            "coverage": {"test": {"query_ids": ["q1"]}}}
+    other = {**base, "coverage": {"test": {"query_ids": ["q2"]}}}
+    assert build_table([base, other]).count("### ") == 2
+
+
+def test_collected_release_can_train_without_collection_backends(tmp_path, monkeypatch):
+    from llm_routing.collection.smoke import run_smoke
+    from llm_routing.collection import collect
+
+    benchmark, _ = run_smoke(str(tmp_path / "release"))
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("training tried to generate or score responses")
+
+    monkeypatch.setattr(collect, "generate", forbidden)
+    monkeypatch.setattr(collect, "score", forbidden)
+    cfg = _experiment(tmp_path, "quality_regression")
+    cfg["benchmark"] = benchmark
+    rec = run_experiment(cfg)
+    assert rec["models"] == ["tiny", "large"]
+    assert rec["num_train"] == 18 and rec["num_test"] == 6  # smoke config uses 60/20/20
+    assert rec["quality_metric"] == "ground_truth" and rec["cost_unit"] == "token_proxy"
+    assert os.path.exists(os.path.join(rec["run_dir"], "metrics.json"))

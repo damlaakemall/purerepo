@@ -42,6 +42,12 @@ runner `fit`'e yalnız o modellerin sütunlarını taşıyan train split'ini ver
 adayları taşır, çünkü yeni modelleri tanıtan küçük etiketli kümedir. Bu durumda
 baseline'lar yalnız val'de (test havuzu) fit edilir, sonuçta `fit_on: val` yazar ve
 leaderboard bu koşuları statik koşulardan ayrı gruplar.
+`runner.training_splits()` ve `evaluation_split()` hem eğitimde hem denetimde
+kullanılır. Test cohort'u, `fit` sonrasında değerlendirme havuzu belli olunca
+hesaplanır; eğitim modellerinin test skorlarının eksik olması yeni modelleri
+değerlendirmeyi engellemez. Boş model listesi hata, `None` bütün adaylar demektir.
+Dinamik havuzda val yoksa train'e geri dönülmez. Her split'in query ID'leri ve
+cohort hash'i kaydedilir; farklı cohort'lar leaderboard'da birleştirilmez.
 
 Modeller hakkında bilgi: `bench.meta["model_info"]` her modelin HF ID'sini, revision'ını
 ve maliyet proxy'sini (parametre, milyar) taşır; release'i değiştirmez, fingerprint'e
@@ -50,11 +56,18 @@ router config'inde durur ve kamuya açık model kartlarından yazılır.
 
 Tek operating point: `sweep` tek elemanlı liste döndürebilir (bir GraphRouter senaryosu).
 O durumda AIQ boş kalır; kalite/maliyet noktası raporlanır.
+`cost_at_max_quality` tek noktanın maliyetini de tabloya taşır; grafikte tek nokta
+işaretçiyle gösterilir.
 
 Otomatik kontrol: `llmr check-router configs/routers/<paper>.yaml`, CPU geliştirme
 verisinde (`configs/benchmarks/synthetic_shared.yaml`: ekibin 12 model adı, 7 kaynak,
-0/1 ve token-F1 skorları, k=10) test skor/maliyetleri karıştırılınca ve (dinamik havuzda)
-yeni modellerin train skorları değişince kararların değişmediğini sınar.
+0/1 ve token-F1 skorları, k=10) test skor/maliyetleri, bütün `extras` kanalları ve
+gold referansları karıştırılınca kararların değişmediğini sınar. Dinamik havuzda
+yeni modellerin train skor/maliyet/extras değerleri NaN yapılarak eksikliğin de
+eğitimi etkilemediği kontrol edilir. `describe()` runner ile aynı JSON yazıcısıyla
+denetlenir; NumPy dizi/skalerlerini önce Python listesi/sayısına dönüştürün.
+Bu kontrol yanıt üretilmeden seçim yapan üç router içindir; cascade'lerde ücretli
+çağrı sırası ve erişilebilen yanıtlar ayrıca makaleye özgü test gerektirir.
 
 `Decision.choice` döndürülen modeli, opsiyonel `sample_index` döndürülen gerçek
 sample'ı gösterir. `Decision.cost` bütün çağrıların toplam ödenmiş maliyetidir.

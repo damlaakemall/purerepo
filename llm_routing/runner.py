@@ -47,6 +47,47 @@ def candidate_models(router: Router, bench) -> list[str]:
     return list(getattr(router, "models", None) or bench.models)
 
 
+def training_splits(router: Router, bench):
+    """One information boundary for both real training and ``check-router``.
+
+    Restrict TRAIN before inspecting missing labels. Keep TEST unfiltered until
+    ``fit`` has declared the evaluation pool; its other model columns may be absent.
+    """
+    from .collection.evaluate import complete_cohort
+
+    sub = bench.select_models(candidate_models(router, bench))
+    train, val, test = (sub.split(s) for s in ("train", "val", "test"))
+    models = router.training_models()
+    if models is not None:
+        if not models or not set(models) <= set(sub.models):
+            raise ValueError("training_models must be a nonempty subset of the candidate models")
+        train = train.select_models(list(models))
+    train = complete_cohort(train)
+    val = complete_cohort(val) if len(val) else val
+    if models is not None and not len(val):
+        raise ValueError("a dynamic pool needs validation data to onboard new models")
+    return train, val, test
+
+
+def evaluation_split(router: Router, test):
+    """Choose the evaluation models after fit, then freeze their complete cohort."""
+    from .collection.evaluate import complete_cohort
+
+    models = router.evaluation_models()
+    if models is not None:
+        if not models or not set(models) <= set(test.models):
+            raise ValueError("evaluation_models must be a nonempty subset of the candidate models")
+        test = test.select_models(list(models))
+    return complete_cohort(test)
+
+
+def cohort_record(available: int, bench) -> dict:
+    from .collection.io import digest
+
+    return {"available": available, "scored": len(bench), "query_ids": bench.query_ids,
+            "cohort_hash": digest(bench.query_ids)}
+
+
 def binary_metrics(decisions, test, small_idx: int, large_idx: int) -> dict:
     """Hybrid LLM's metrics: share of traffic to the small model vs. quality drop relative to all-large."""
     q = test.realized()
@@ -55,7 +96,7 @@ def binary_metrics(decisions, test, small_idx: int, large_idx: int) -> dict:
     pts = []
     for d in decisions:
         share = float(np.mean(d.choice == small_idx))
-        drop = (base - float(np.nanmean(q[rows, d.choice]))) / abs(base) * 100
+        drop = (base - float(np.nanmean(q[rows, d.choice]))) / abs(base) * 100 if base != 0 else float("nan")
         pts.append((share, drop))
     pts = np.array(sorted(pts))
     out = {f"quality_drop_pct@{int(t * 100)}%": float(np.interp(t, pts[:, 0], pts[:, 1])) for t in (0.1, 0.2, 0.4)}
@@ -114,23 +155,10 @@ def run_experiment(cfg: dict) -> dict:
     fp = bench.fingerprint()
     router = build_router(cfg["router"], seed=cfg["seed"])
     models = candidate_models(router, bench)
-    sub = bench.select_models(models)
-    train, val, test = sub.split("train"), sub.split("val"), sub.split("test")
     train_models = router.training_models()
-    if train_models:  # dynamic pool: fit may not read the other models' TRAIN labels
-        if not set(train_models) <= set(models):
-            raise ValueError(f"training models {train_models} are not candidates {models}")
-        train = train.select_models(list(train_models))
-    # a fixed complete-case cohort per split; incomplete rows are reported, never silently dropped
-    # from one model's average. Test is restricted after fit, once the router's test pool is known.
-    use_cohort = bench.meta.get("protocol") == "shared-v1" or bool(np.isnan(bench.realized()).any())
-    coverage = None
-    if use_cohort:
-        from .collection.evaluate import complete_cohort
-        before = {"train": len(train), "val": len(val)}
-        train, val = complete_cohort(train), complete_cohort(val)
-        coverage = {s: {"available": before[s], "scored": len(b), "query_ids": b.query_ids}
-                    for s, b in (("train", train), ("val", val))}
+    train, val, test = training_splits(router, bench)
+    coverage = {s: cohort_record(len(bench.split(s)), b)
+                for s, b in (("train", train), ("val", val))}
     print(f"[run] {cfg['name']}  benchmark={bench.name} ({fp})  models={models}  "
           f"train/val/test={len(train)}/{len(val)}/{len(test)}"
           + (f"  training models={list(train_models)}" if train_models else ""))
@@ -145,16 +173,13 @@ def run_experiment(cfg: dict) -> dict:
     router.fit(train, val)
     fit_seconds = time.time() - t0
     eval_models = router.evaluation_models()
-    if eval_models:
-        if not set(eval_models) <= set(models):
-            raise ValueError(f"evaluation models {eval_models} are not candidates {models}")
-        models, test = list(eval_models), test.select_models(list(eval_models))
+    before = len(test)
+    test = evaluation_split(router, test)
+    models = list(test.models)
+    if eval_models is not None:
         print(f"[run] evaluating on the router's test pool: {models}")
-    if use_cohort:
-        before = len(test)
-        test = complete_cohort(test)
-        coverage["test"] = {"available": before, "scored": len(test), "query_ids": test.query_ids}
-        print(f"[run] complete-case test cohort: {len(test)} of {before} queries")
+    coverage["test"] = cohort_record(before, test)
+    print(f"[run] complete-case test cohort: {len(test)} of {before} queries")
     eval_val = val.select_models(models)
 
     results, curve_rows = [], []
@@ -170,13 +195,13 @@ def run_experiment(cfg: dict) -> dict:
             print("[run] skipping random_binary baseline: router is not binary")
             continue
         br = build_router(bcfg, seed=cfg["seed"])
-        if train_models:  # same information as the router: the test pool's labels on VAL only
+        if train_models is not None:  # same information as the router: test-pool labels on VAL only
             br.fit(eval_val, None)
         else:
             br.fit(train, val)
         bm, brows = evaluate_router(br, test, val=eval_val)
         results.append({"router": br.name, "type": b, "family": br.family, "is_baseline": True,
-                        "fit_on": "val" if train_models else "train", **bm})
+                        "fit_on": "val" if train_models is not None else "train", **bm})
         curve_rows += brows
 
     singles = single_model_points(test)
@@ -228,7 +253,8 @@ def plot_run(record: dict, curve_rows: list[dict], path: str):
     for name in dict.fromkeys(r["router"] for r in curve_rows):
         pts = sorted((r["cost"], r["quality"]) for r in curve_rows if r["router"] == name)
         xs, ys = zip(*pts)
-        ax.plot(xs, ys, "--" if name in ("random", "oracle") else "-", label=name, lw=1.4)
+        ax.plot(xs, ys, "--" if name in ("random", "oracle") else "-", label=name, lw=1.4,
+                marker="o" if len(pts) == 1 else None)
     for m, v in record["single_models"].items():
         ax.scatter([v["cost"]], [v["quality"]], marker="o", s=28, zorder=3)
         ax.annotate(m, (v["cost"], v["quality"]), fontsize=7, xytext=(3, 3), textcoords="offset points")

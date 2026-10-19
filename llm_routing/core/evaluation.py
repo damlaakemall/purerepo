@@ -104,6 +104,7 @@ def summarize(decisions: list[Decision], bench: Benchmark, reference_model: str 
         # over the whole cost range, as if that quality were reachable at every budget
         "aiq": aiq(pts, costs.min(), costs.max()) if len(pts) > 1 else None,
         "max_quality": float(pts[:, 1].max()),
+        "cost_at_max_quality": float(pts[np.argmax(pts[:, 1]), 0]),
         "quality_at_max_cost": float(pts[np.argmax(pts[:, 0]), 1]),
         "reference_model": ref,
         "cost_to_match_reference": cost_to_match(pts, ref_q, ref_c),

@@ -26,7 +26,7 @@ This repo is for **learning** how routers work, so an implementation should read
 4. **Config**: add `configs/routers/<paper>.yaml` (a fast CPU variant) and, if the paper uses a large encoder, `<paper>_<encoder>.yaml` with the paper's exact setup.
 5. **Experiments**: add `configs/experiments/<paper>__synthetic_shared.yaml` (CPU data shaped like the shared release, with the team's model names) and `<paper>__shared_v2.yaml` (the real data); copy the `quality_regression__*` configs. A public benchmark (MixInstruct, RouterBench) is optional.
 6. **Docs**: write `docs/papers/<paper>.md` using [`docs/papers/_template.md`](docs/papers/_template.md), and add a row to [docs/concepts/comparison.md](docs/concepts/comparison.md) and the README table.
-7. **Tests**: add the router config to `test_check_router` in `tests/test_router_infra.py`, plus unit tests for the paper-specific parts in `tests/test_<paper>.py`. Then run `llmr check-router configs/routers/<paper>.yaml`: it fails if decisions change when test scores/costs are shuffled, or (dynamic pool) when the new models' train scores change.
+7. **Tests**: add the router config to `test_check_router` in `tests/test_router_infra.py`, plus unit tests for the paper-specific parts in `tests/test_<paper>.py`. Then run `llmr check-router configs/routers/<paper>.yaml`: it perturbs test scores, costs, every `extras` outcome channel and gold references; for a dynamic pool it also removes the new models' train scores/costs/extras. It checks that decisions stay unchanged and that `describe()` can be saved by the runner's JSON serializer. Return plain Python values there (e.g. NumPy arrays via `.tolist()`).
 
 ### Rules that keep the comparison fair
 

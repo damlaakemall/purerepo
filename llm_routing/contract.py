@@ -7,8 +7,8 @@ token-F1 scores, k=10 samples, a few missing cells):
 
 registered        the config builds a registered router
 decisions         fit(train, val) then sweep(test): valid, finite, cheapest operating point first
-no test labels    shuffling the test split's scores and costs across queries changes no decision
-dynamic pool      with training_models(): changing the other models' TRAIN scores changes no decision
+no test labels    shuffling scores, costs, extras and gold references changes no decision
+dynamic pool      changing hidden models' TRAIN scores, costs, extras and missingness changes no decision
 describe          describe() is JSON-serializable, so it can be saved in metrics.json
 
 Passing them is necessary, not sufficient: the paper-specific parts (labels, loss, threshold
@@ -24,17 +24,6 @@ import numpy as np
 DEV_BENCHMARK = "configs/benchmarks/synthetic_shared.yaml"
 
 
-def _splits(router, bench):
-    from .collection.evaluate import complete_cohort
-    from .runner import candidate_models
-
-    sub = bench.select_models(candidate_models(router, bench))
-    train, val, test = sub.split("train"), sub.split("val"), sub.split("test")
-    if router.training_models():
-        train = train.select_models(list(router.training_models()))
-    return complete_cohort(train), complete_cohort(val), complete_cohort(test)
-
-
 def _decisions(router, test, num):
     out = []
     for d in router.sweep(test, num):
@@ -43,10 +32,21 @@ def _decisions(router, test, num):
     return out
 
 
+def _shuffle_outcomes(bench, seed):
+    """Keep observable queries/sources fixed, perturb every stored outcome channel."""
+    shuffled = bench.subset(np.arange(len(bench)))
+    perm = np.random.default_rng(seed).permutation(len(bench))
+    shuffled.scores, shuffled.costs = bench.scores[perm], bench.costs[perm]
+    shuffled.extras = {name: values[perm] for name, values in bench.extras.items()}
+    if bench.references is not None:
+        shuffled.references = [bench.references[i] for i in perm]
+    return shuffled
+
+
 def check_router(router_cfg: dict, bench, seed: int = 0, num: int = 11) -> list[tuple[str, bool, str]]:
     from .core.evaluation import curve
     from .registry import build_router
-    from .runner import set_seed
+    from .runner import evaluation_split, set_seed, training_splits
 
     results = []
 
@@ -60,36 +60,46 @@ def check_router(router_cfg: dict, bench, seed: int = 0, num: int = 11) -> list[
         return [("registered", False, f"{type(e).__name__}: {e}")]
     results.append(("registered", True, f"{type(router).__name__} ({router.family})"))
 
-    train, val, test = _splits(router, bench)
-    router.fit(train, val)
-    evaluated = test.select_models(router.evaluation_models()) if router.evaluation_models() else test
-    pts = curve(router.sweep(evaluated, num), evaluated)
-    ok = bool(len(pts)) and pts[0, 0] <= pts[-1, 0] + 1e-9
-    results.append(("decisions", ok, f"{len(pts)} operating point(s); cost {pts[0, 0]:.3g} -> {pts[-1, 0]:.3g}"))
+    try:
+        train, val, test = training_splits(router, bench)
+        router.fit(train, val)
+        evaluated = evaluation_split(router, test)
+        pts = curve(router.sweep(evaluated, num), evaluated)
+        if not len(pts):
+            return results + [("decisions", False, "sweep() returned no operating points")]
+        ok = bool(pts[0, 0] <= pts[-1, 0] + 1e-9)
+        results.append(("decisions", ok, f"{len(pts)} operating point(s); cost {pts[0, 0]:.3g} -> {pts[-1, 0]:.3g}"))
+    except Exception as e:  # report invalid fits/decisions as a failed check, not a traceback
+        return results + [("decisions", False, f"{type(e).__name__}: {e}")]
 
-    shuffled = evaluated.subset(np.arange(len(evaluated)))
-    perm = np.random.default_rng(seed + 1).permutation(len(shuffled))
-    shuffled.scores, shuffled.costs = shuffled.scores[perm], shuffled.costs[perm]
-    same = _decisions(router, evaluated, num) == _decisions(router, shuffled, num)
-    results.append(("no test labels", same, "decisions unchanged when test scores/costs are shuffled" if same else
-                    "decisions changed: sweep() reads test scores or costs"))
+    try:
+        shuffled = _shuffle_outcomes(evaluated, seed + 1)
+        same = _decisions(router, evaluated, num) == _decisions(router, shuffled, num)
+        results.append(("no test labels", same, "decisions unchanged when all test outcome channels are shuffled" if same else
+                        "decisions changed: sweep() reads a test outcome channel"))
+    except Exception as e:
+        results.append(("no test labels", False, f"{type(e).__name__}: {e}"))
 
-    if router.training_models():
+    if router.training_models() is not None:
         other = [j for j, m in enumerate(bench.models) if m not in router.training_models()]
         flipped = bench.subset(np.arange(len(bench)))
         rows = flipped.split_of == "train"
-        s = flipped.scores.copy()
-        s[np.ix_(rows, other)] = np.where(np.isfinite(s[np.ix_(rows, other)]), 1.0 - s[np.ix_(rows, other)], np.nan)
-        flipped.scores = s
+        hidden = np.ix_(rows, other)
+        # Alter missingness as well: hidden train labels must not choose the fit cohort.
+        flipped.scores[hidden] = np.nan
+        flipped.costs[hidden] = np.nan
+        for values in flipped.extras.values():
+            values[hidden] = np.nan
         again = build()
-        tr, va, te = _splits(again, flipped)
+        tr, va, _ = training_splits(again, flipped)
         again.fit(tr, va)
-        same = _decisions(router, evaluated, num) == _decisions(again, evaluated, num)
+        same = (router.evaluation_models() == again.evaluation_models() and
+                _decisions(router, evaluated, num) == _decisions(again, evaluated, num))
         results.append(("dynamic pool", same, "new models' TRAIN labels unused" if same else
                         "decisions changed: fit() reads TRAIN labels of models outside training_models()"))
 
     try:
-        json.dumps(router.describe(), default=str)
+        json.dumps(router.describe())  # exactly the serializer used for metrics.json
         results.append(("describe", True, "JSON-serializable"))
     except (TypeError, ValueError) as e:
         results.append(("describe", False, str(e)))

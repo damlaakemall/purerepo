@@ -8,7 +8,7 @@ genel işleyişini gerçek bir koşuyla gösterir.
 | adım | yazı | durum |
 |---|---|---|
 | 1 | [Router'lar için eğitim verisi üretmek](01_egitim_verisi.md): sorular, modeller, Tosun'da cevap üretme, puanlama, kontrol | v1 pilotu doğrulandı; v2 config'leri hazır ve Tosun kontrol edildi (19 Ekim 2026), v2 GPU pilotu/tam koleksiyon bekliyor |
-| 2 | Router'ları eğitmek ve karşılaştırmak (her makale bir bölüm) | sırada |
+| 2 | [Router eğitimine hazırlık ve karşılaştırma](02_router_egitimi.md) (makaleler geldikçe aynı yazıya birer bölüm) | ortak altyapı ve release → eğitim bağlantısı CPU'da doğrulandı; üç router'ın implementasyonu ve gerçek eğitimler bekliyor |
 
 Önce [routing temelleri](../concepts/routing_fundamentals.md) okunursa bu adımların neden gerektiği kendiliğinden
 anlaşılır. Ayrıntılı kurallar ve dosya biçimleri: [teknik protokol](../team/shared_protocol.md),

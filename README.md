@@ -91,6 +91,8 @@ shared-data experiments so far are the baseline's (`quality_regression__shared_v
 paper routers add theirs. The [Hybrid LLM, GraphRouter and UniRoute training plan (Türkçe)](docs/team/uc_router_egitim_plani.md)
 maps the papers and reference code to our data, with proposed `shared_v2` experiments. The shared evaluation
 pieces they need are in place; the routers themselves are still planned ([how to add one](AGENTS.md#when-adding-a-router)).
+The [training walkthrough (Türkçe)](docs/walkthrough/02_router_egitimi.md) records the checked path from
+an assembled test-double release to training. The three paper implementations and real GPU runs are pending.
 
 ## The shared data (`shared_v1`)
 

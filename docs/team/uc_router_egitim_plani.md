@@ -291,6 +291,11 @@ bütün modelli val'i alır; train cohort'u yalnız `H_train`'e, test cohort'u y
 bakar. Baseline'lar bu durumda yalnız val'de (test havuzu) fit edilir ve sonuçta
 `fit_on: val` yazar. `llmr check-router` yeni modellerin train skorları değişince kararın
 değişmediğini sınar.
+Eğitim ve denetim aynı split yardımcılarını kullanır. Denetim `extras` ve gold
+referanslarından sızıntıyı da sınar; yeni modellerin train kayıtlarını eksik yaparak
+cohort'un bu kayıtlara dayanmadığını kontrol eder. `describe()` gerçek JSON
+serileştirmesiyle kontrol edilir. Çalıştırılmış altyapı örneği:
+[eğitim walkthrough'u](../walkthrough/02_router_egitimi.md).
 
 Adil dinamik baseline'lar: val profiline dayalı sabit model/Pareto-random ve **val
 bankalı kNN**. Quality regression eklenirse `H_new` için sadece tanıtım verisiyle eğitilen
@@ -316,7 +321,7 @@ Ortak kısımlar 19 Ekim 2026'da eklendi ("hazır" satırları). Kalanlar router
 | `runner.py` | `Router.training_models()`: train split'i cohort'tan önce o modellere daraltılır; test cohort'u test havuzu belli olduktan sonra; dinamik havuzda baseline'lar yalnız val'de fit | hazır |
 | `runner.py` | `BinaryRouter` için val'de seçilip test'e bir kez uygulanan eşik (`test@val_threshold_*`) | hazır |
 | `core/evaluation.py` | tek operating point'te AIQ boş (`None`); kalite/maliyet noktası raporlanır | hazır |
-| `leaderboard.py` | eğitim havuzu farklı koşular ayrı grupta; val eşiği sütunları | hazır |
+| `leaderboard.py` | eğitim havuzu veya train/val/test cohort'u farklı koşular ayrı grupta; val eşiği ve maliyet sütunları | hazır |
 | `collection/assemble.py` | `meta["model_info"]`: model ID, revision, parametre/maliyet (GraphRouter model açıklamaları için) | hazır |
 | `core/embeddings.py`, `core/labels.py` | dondurulmuş encoder ile embedding (+cache); label manifesti | hazır |
 | `llmr check-router` | test etiketi/maliyeti, dinamik havuz ve `describe()` kontrolü, CPU'da saniyeler | hazır |

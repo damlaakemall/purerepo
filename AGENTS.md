@@ -42,7 +42,8 @@ llmr routers                                                # registered routers
 llmr check-router configs/routers/<router>.yaml             # fairness checks for one router, CPU, seconds
 ```
 
-CI (`.github/workflows/`) runs these three. Real generation and scoring only run on Tosun GPUs:
+CI (`.github/workflows/`) runs the tests, both CPU training smokes, the router contract check and
+the collection smoke. Real generation and scoring only run on Tosun GPUs:
 
 ```bash
 bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_pilot.yaml <member> 1    # 30-query pilot of a member's 4 models
@@ -111,4 +112,7 @@ llmr train configs/experiments/<paper>__synthetic_shared.yaml
 ```
 
 The real run waits for the shared release: `bash cluster/tosun/submit_train.sh configs/experiments/<paper>__shared_v2.yaml 3`.
+The shared infrastructure and its checked release-to-training example are documented in
+[the training walkthrough](docs/walkthrough/02_router_egitimi.md). Paper-specific decisions stay open;
+infrastructure readiness is not a claim that any of the three routers is implemented.
 An explanatory notebook in `notebooks/<paper>.ipynb` is welcome. It must import the router module, not copy it.

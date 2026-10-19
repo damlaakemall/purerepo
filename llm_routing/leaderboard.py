@@ -13,7 +13,8 @@ from collections import defaultdict
 
 import numpy as np
 
-COLUMNS = [("aiq", "AIQ ↑"), ("max_quality", "max quality ↑"), ("cost_to_match_reference", "cost to match best ↓"),
+COLUMNS = [("aiq", "AIQ ↑"), ("max_quality", "max quality ↑"), ("cost_at_max_quality", "cost at max quality"),
+           ("cost_to_match_reference", "cost to match best ↓"),
            ("cost_advantage@drop<=1%", "small-model share @≤1% drop, test sweep ↑"),
            ("test@val_threshold_small_share", "small-model share @ val threshold ↑"),
            ("test@val_threshold_quality_drop_pct", "drop % @ val threshold ↓"), ("quality_drop_pct@40%", "drop % @40% ↓")]
@@ -28,12 +29,22 @@ def collect(runs_dir: str = "runs") -> list[dict]:
 
 
 def build_table(records: list[dict]) -> str:
-    groups = defaultdict(lambda: defaultdict(list))  # (bench, fp, models) -> (router label) -> [result]
+    from .collection.io import digest
+
+    groups = defaultdict(lambda: defaultdict(list))  # data + pool + cohorts -> router -> results
     for rec in records:
         pool = " vs ".join(rec["models"])
         if rec.get("training_models"):  # a dynamic-pool protocol is a different comparison
             pool += f" (trained on {', '.join(rec['training_models'])})"
-        key = (rec["benchmark"], rec["fingerprint"], pool)
+        coverage = rec.get("coverage") or {}
+        cohorts = []
+        for split in ("train", "val", "test"):
+            info = coverage.get(split) or {}
+            identity = info.get("cohort_hash")
+            if not identity and "query_ids" in info:
+                identity = digest(info["query_ids"])
+            cohorts.append(identity or "unknown")
+        key = (rec["benchmark"], rec["fingerprint"], pool, tuple(cohorts))
         for r in rec["results"]:
             label = r["router"] + (" (baseline)" if r.get("is_baseline") else "")
             # the same baseline is evaluated by every experiment on this data: count each seed once
@@ -41,8 +52,9 @@ def build_table(records: list[dict]) -> str:
                 continue
             groups[key][label].append({**r, "_seed": rec["seed"]})
     lines = []
-    for (bench, fp, models), routers in sorted(groups.items()):
-        lines += [f"### {bench} — models: {models}", f"data fingerprint `{fp}`", "",
+    for (bench, fp, models, cohorts), routers in sorted(groups.items()):
+        lines += [f"### {bench} — models: {models}", f"data fingerprint `{fp}`",
+                  "cohorts (train / val / test): " + " / ".join(f"`{c}`" for c in cohorts), "",
                   "| router | seeds | " + " | ".join(h for _, h in COLUMNS) + " |",
                   "|---|---|" + "---|" * len(COLUMNS)]
         for label, rs in sorted(routers.items(), key=lambda kv: (kv[0].endswith("(baseline)"), kv[0])):
