@@ -65,13 +65,18 @@ Any config value can be overridden on the command line, for example
 
 ## On the cluster (Tosun)
 
-Real generation and scoring only run on Tosun GPUs. Do the one-time setup in
-[cluster/tosun/README.md](cluster/tosun/README.md), then always start with the 30-query pilot:
+Real generation and scoring only run on Tosun GPUs. We are three people, and each collects four of the
+12 models ([`cluster/tosun/team.yaml`](cluster/tosun/team.yaml)). İbrahim G is the coordinator, who builds and
+shares the dataset once and assembles everyone's bundles at the end. The steps are in the
+[team guide (Türkçe)](docs/team/team_workflow.md#0-üç-kişiyiz-kim-ne-yapar).
+
+Do the one-time setup in [cluster/tosun/README.md](cluster/tosun/README.md), then always start with the
+30-query pilot:
 
 ```bash
-bash cluster/tosun/submit_member.sh configs/benchmarks/shared_pilot.yaml <model> <member> 1   # pilot
-python cluster/tosun/inspect_shard.py configs/benchmarks/shared_pilot.yaml <model> <member>    # check it
-bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v1.yaml <model> <member> 4      # full run
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_pilot.yaml <member> 1        # pilot, your 4 models
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_pilot.yaml <model> <member>   # check each one
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v1.yaml <member> 4           # full run
 ```
 
 Router training on Tosun uses `bash cluster/tosun/submit_train.sh <experiment.yaml> <num_seeds>`. There are

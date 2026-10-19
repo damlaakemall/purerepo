@@ -21,7 +21,7 @@ A **learning project** at Sabancı University. The team re-implements LLM routin
 | `llm_routing/legacy_pipeline/` | older single-user pipeline (`ours_v1`); not used for team data. Its `scorers.py` `bartscore` is the paper's reference-based variant, not the `shared_v1` channel |
 | `llm_routing/runner.py`, `cli.py` | the single train + evaluate procedure, and the `llmr` command |
 | `configs/` | `benchmarks/` (`shared_v1.yaml` is the main one), `model_pools/team.yaml` (12 models), `routers/`, `experiments/` |
-| `cluster/tosun/` | SLURM scripts for Tosun; start with its README |
+| `cluster/tosun/` | SLURM scripts for Tosun; start with its README. `team.yaml`: which of the 3 members collects which 4 models |
 | `docs/concepts/` | routing fundamentals, comparison, benchmarks, evaluation metrics (English) |
 | `docs/team/` | team workflow, `shared_v1` data protocol, router contract (Turkish) |
 | `docs/papers/` | paper explainer template (one explainer per paper) |
@@ -43,7 +43,8 @@ llmr routers                                                # registered routers
 CI (`.github/workflows/`) runs these three. Real generation and scoring only run on Tosun GPUs:
 
 ```bash
-bash cluster/tosun/submit_member.sh configs/benchmarks/shared_pilot.yaml <model> <member> 1   # 30-query pilot first
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_pilot.yaml <member> 1    # 30-query pilot of a member's 4 models
+bash cluster/tosun/submit_member.sh configs/benchmarks/shared_pilot.yaml <model> <member> 1   # or one model
 python cluster/tosun/inspect_shard.py configs/benchmarks/shared_pilot.yaml <model> <member>    # check it before packaging
 ```
 

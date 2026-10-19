@@ -1,0 +1,22 @@
+# Who collects which model for shared_v1 on Tosun. Three members, four models each.
+# `submit_my_models.sh CONFIG MEMBER` reads this file; tests/test_team.py checks that every model of
+# configs/model_pools/team.yaml is assigned exactly once.
+#
+# The split: one large (2-GPU) model per member, and the parameter sum per member (a rough proxy for GPU
+# time) kept close: 51.1B / 46.2B / 49.4B. The three gated models (both Llamas, Gemma) are with one member,
+# so only that member has to accept the Llama and Gemma licenses on huggingface.co.
+#
+# `member` is written into the data (contributions/<member>/, exports/<member>-...) and must stay the same
+# once collection has started. It may only contain letters, digits, _ . - (no spaces, no Turkish letters).
+# The coordinator builds and shares the frozen dataset once, then assembles the release from everyone's bundles.
+members:
+  - name: İbrahim G
+    member: ibrahimg
+    coordinator: true
+    models: [qwen2.5-32b, olmo-3-7b, mistral-7b-v0.3, phi-4-mini]              # 51.1B
+  - name: Damla
+    member: damla
+    models: [gemma-3-27b, llama-3.1-8b, qwen2.5-7b, llama-3.2-3b]              # 46.2B, all gated models
+  - name: İbrahim B
+    member: ibrahimb
+    models: [mistral-small-24b, phi-4, deepseek-r1-distill-llama-8b, smollm3-3b]  # 49.4B; phi-4 needs >= 40 GB, R1 writes long answers

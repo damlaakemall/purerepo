@@ -68,8 +68,16 @@ srun --partition=cuda --qos=cuda --gres=gpu:1 --mem=32G --time=01:00:00 --pty ba
 
 ## Independent shared-v1 member jobs
 
-For the new protocol use `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` after
-freezing/sharing the dataset. It requests the model's `gpus` (2 for the 24B, 27B and 32B models), then runs
+We are three members with four models each; the assignment is in [`team.yaml`](team.yaml) and the team
+procedure (who builds the dataset, who assembles) in the [team workflow](../../docs/team/team_workflow.md#0-üç-kişiyiz-kim-ne-yapar).
+After the dataset is frozen and shared, each member submits all their models with
+
+```bash
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_pilot.yaml <member> 1   # pilot first
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v1.yaml <member> 4      # full run
+```
+
+which calls `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` once per model (use that directly to resubmit one model). It requests the model's `gpus` (2 for the 24B, 27B and 32B models), then runs
 GT (CPU), ArmoRM (1 GPU) and BARTScore (1 GPU, if configured) scoring in parallel and packages the shard; it never submits router training.
 `LLMR_BATCH_SIZE` (default 256) is how many requests go to vLLM at once. The older `submit_pipeline.sh` continues
 to serve the original ours_v1/ours_dev configs. See [team workflow](../../docs/team/team_workflow.md).
