@@ -108,3 +108,25 @@ def test_hf_loader_selects_checkpoint_class_and_removes_vllm_options(monkeypatch
     g._load()
     assert calls == [("conditional" if multimodal else "causal", "fake/model",
                       {"revision": "pinned", "device_map": "auto"})]
+
+
+def test_native_mistral_prompt_keeps_native_chat_ids():
+    from llm_routing.collection.io import digest
+    class Native:
+        IS_MISTRAL_TOKENIZER = True
+        instruct = object()
+        version = 7
+        def apply_chat_template(self, messages, **kwargs):
+            assert messages == [{"role": "user", "content": "question"}]
+            assert kwargs == {"tokenize": True, "add_generation_prompt": True}
+            return [1, 42, 3]
+        def decode(self, ids, skip_special_tokens):
+            assert ids == [1, 42, 3] and not skip_special_tokens
+            return "<s>[INST]question[/INST]"
+    gen = Generator({"model_id": "native/model", "revision": "pinned"}, {})
+    gen.model_id = "native/model"
+    gen.tok = Native()
+    ids, meta = gen._prompt("question", 5)
+    assert ids == [1, 42, 3]
+    assert meta["prompt_tokens"] == 3 and meta["prompt_token_ids_hash"] == digest(ids)
+    assert meta["tokenizer_revision"] == "pinned" and meta["seed_applied"]

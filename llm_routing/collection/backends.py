@@ -67,6 +67,19 @@ class Generator:
         messages = messages_for(m, query)
         meta = {"engine": self.engine, "model_id": self.model_id, "requested_revision": m.get("revision"),
                 "seed_requested": seed, "messages": messages}
+        # vLLM's native Mistral tokenizer implements chat formatting without a
+        # Jinja chat_template attribute. Keep its native IDs; do not round-trip
+        # control tokens through plain text or send an unformatted user prompt.
+        if getattr(self.tok, "IS_MISTRAL_TOKENIZER", False):
+            ids = self.tok.apply_chat_template(messages, tokenize=True, add_generation_prompt=True,
+                                               **m.get("chat_template_kwargs", {}))
+            template = f"mistral-native:{type(self.tok.instruct).__name__}:v{self.tok.version}"
+            meta.update(response_prefix="", formatted_prompt=self.tok.decode(ids, skip_special_tokens=False),
+                        chat_template=template, chat_template_hash=digest(template),
+                        chat_template_kwargs=m.get("chat_template_kwargs", {}), tokenizer_name=self.model_id,
+                        tokenizer_revision=m.get("tokenizer_revision", m.get("revision")), seed_applied=True,
+                        prompt_token_ids_hash=digest(ids), prompt_tokens=len(ids))
+            return ids, meta
         template = getattr(self.tok, "chat_template", None)
         if not template and m.get("system_prompt"):
             raise ValueError("system_prompt requires a chat template")
@@ -78,8 +91,8 @@ class Generator:
         opened = re.search(r"<(think|thinking|reasoning)>\s*$", formatted) if template else None
         meta["response_prefix"] = opened.group(0) if opened else ""
         meta.update(formatted_prompt=formatted, chat_template=template, chat_template_hash=digest(template),
-                    chat_template_kwargs=m.get("chat_template_kwargs", {}), tokenizer_name=self.tok.name_or_path,
-                    tokenizer_revision=self.tok.init_kwargs.get("_commit_hash"), seed_applied=True)
+                    chat_template_kwargs=m.get("chat_template_kwargs", {}), tokenizer_name=getattr(self.tok, "name_or_path", self.model_id),
+                    tokenizer_revision=getattr(self.tok, "init_kwargs", {}).get("_commit_hash"), seed_applied=True)
         # Already-formatted chat prompts include special tokens. Do not add them twice.
         ids = self.tok.encode(formatted, add_special_tokens=not bool(template))
         meta.update(prompt_token_ids_hash=digest(ids), prompt_tokens=len(ids))

@@ -1,0 +1,302 @@
+# shared_v4: dated OpenRouter provider tariffs, local Tosun generation only.
+# No model IDs overlap with the inspected SU Lab reference e6578414.
+# USD per ONE MILLION uncached input/output tokens; no paid inference calls.
+# See docs/walkthrough/01_egitim_verisi.md (shared_v4) for selection and limitations.
+# Pin HF revisions independently: hosted quantization/revision may differ from local weights.
+# Price selection: live regular endpoints, no discount/extra request or reasoning fee,
+# context >=16384 and completion >=8192; minimize input+output rate, ties by endpoint tag.
+# Phi-4 has a hosted 4096 prompt-token limit: this is a counterfactual tariff, not a deployment guarantee.
+# 12B+ generation requests one 96GB GPU; real memory/context/throughput pilots are pending.
+# Qwen3-14B and Qwen3-32B: thinking disabled, matching the reference Qwen policy.
+# Qwen3-32B and Mistral-Nemo: 16384 output tokens within 32768 total context; others retain 8192/16384.
+# Output budgets are upper bounds: price only actual tokens; tariffs remain the frozen 2026-10-19 snapshot.
+models:
+- name: llama-3.2-3b
+  model_id: meta-llama/Llama-3.2-3B-Instruct
+  revision: 0cb88a4f764b7a12671c53f0838cd831a0843b95
+  parameters_b: 3.213
+  chat_template_kwargs: {}
+  engine_kwargs:
+    max_model_len: 16384
+    dtype: bfloat16
+  pricing:
+    input_per_1m: 0.05
+    output_per_1m: 0.33
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: meta-llama/llama-3.2-3b-instruct
+    provider: Parasail
+    endpoint: parasail/bf16
+    quantization: bf16
+    context_length: 131072
+    max_prompt_tokens: null
+    max_completion_tokens: 117964
+    source_hf_id: meta-llama/Llama-3.2-3B-Instruct
+    source: https://openrouter.ai/api/v1/models/meta-llama/llama-3.2-3b-instruct/endpoints
+- name: gemma-3-4b
+  model_id: google/gemma-3-4b-it
+  revision: 093f9f388b31de276ce2de164bdc2081324b9767
+  parameters_b: 4.3
+  chat_template_kwargs: {}
+  engine_kwargs:
+    max_model_len: 16384
+    dtype: bfloat16
+  hf_loader: multimodal_lm
+  pricing:
+    input_per_1m: 0.04
+    output_per_1m: 0.05
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: google/gemma-3-4b-it
+    provider: Parasail
+    endpoint: parasail/bf16
+    quantization: bf16
+    context_length: 131072
+    max_prompt_tokens: null
+    max_completion_tokens: 117964
+    source_hf_id: google/gemma-3-4b-it
+    source: https://openrouter.ai/api/v1/models/google/gemma-3-4b-it/endpoints
+- name: qwen2.5-7b
+  model_id: Qwen/Qwen2.5-7B-Instruct
+  revision: a09a35458c702b33eeacc393d103063234e8bc28
+  parameters_b: 7.616
+  chat_template_kwargs: {}
+  engine_kwargs:
+    max_model_len: 16384
+    dtype: bfloat16
+  pricing:
+    input_per_1m: 0.1
+    output_per_1m: 0.2
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: qwen/qwen-2.5-7b-instruct
+    provider: Phala
+    endpoint: phala
+    quantization: unknown
+    context_length: 32768
+    max_prompt_tokens: null
+    max_completion_tokens: 29491
+    source_hf_id: Qwen/Qwen2.5-7B-Instruct
+    source: https://openrouter.ai/api/v1/models/qwen/qwen-2.5-7b-instruct/endpoints
+- name: llama-3.1-8b
+  model_id: meta-llama/Llama-3.1-8B-Instruct
+  revision: 0e9e39f249a16976918f6564b8830bc894c89659
+  parameters_b: 8.03
+  chat_template_kwargs: {}
+  engine_kwargs:
+    max_model_len: 16384
+    dtype: bfloat16
+  pricing:
+    input_per_1m: 0.02
+    output_per_1m: 0.04
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: meta-llama/llama-3.1-8b-instruct
+    provider: DeepInfra
+    endpoint: deepinfra/fp8
+    quantization: fp8
+    context_length: 131072
+    max_prompt_tokens: null
+    max_completion_tokens: 16384
+    source_hf_id: meta-llama/Meta-Llama-3.1-8B-Instruct
+    source: https://openrouter.ai/api/v1/models/meta-llama/llama-3.1-8b-instruct/endpoints
+- name: mistral-nemo-12b
+  model_id: mistralai/Mistral-Nemo-Instruct-2407
+  revision: 04d8a90549d23fc6bd7f642064003592df51e9b3
+  parameters_b: 12.248
+  chat_template_kwargs: {}
+  generation:
+    max_new_tokens: 16384
+  engine_kwargs:
+    max_model_len: 32768
+    dtype: bfloat16
+  gpus: 1
+  gpu_type: rtx_pro_6000
+  pricing:
+    input_per_1m: 0.018
+    output_per_1m: 0.03
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: mistralai/mistral-nemo
+    provider: DekaLLM
+    endpoint: dekallm/fp8
+    quantization: fp8
+    context_length: 131072
+    max_prompt_tokens: null
+    max_completion_tokens: 104857
+    source_hf_id: mistralai/Mistral-Nemo-Instruct-2407
+    source: https://openrouter.ai/api/v1/models/mistralai/mistral-nemo/endpoints
+- name: gemma-3-12b
+  model_id: google/gemma-3-12b-it
+  revision: 96b6f1eccf38110c56df3a15bffe176da04bfd80
+  parameters_b: 12.187
+  chat_template_kwargs: {}
+  engine_kwargs:
+    max_model_len: 16384
+    dtype: bfloat16
+  hf_loader: multimodal_lm
+  gpus: 1
+  gpu_type: rtx_pro_6000
+  pricing:
+    input_per_1m: 0.05
+    output_per_1m: 0.15
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: google/gemma-3-12b-it
+    provider: DeepInfra
+    endpoint: deepinfra/bf16
+    quantization: bf16
+    context_length: 131072
+    max_prompt_tokens: null
+    max_completion_tokens: 16384
+    source_hf_id: google/gemma-3-12b-it
+    source: https://openrouter.ai/api/v1/models/google/gemma-3-12b-it/endpoints
+- name: qwen3-14b
+  model_id: Qwen/Qwen3-14B
+  revision: 40c069824f4251a91eefaf281ebe4c544efd3e18
+  parameters_b: 14.768
+  chat_template_kwargs:
+    enable_thinking: false
+  engine_kwargs:
+    max_model_len: 16384
+    dtype: bfloat16
+  gpus: 1
+  gpu_type: rtx_pro_6000
+  pricing:
+    input_per_1m: 0.1
+    output_per_1m: 0.22
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: qwen/qwen3-14b
+    provider: NextBit
+    endpoint: nextbit/int4
+    quantization: int4
+    context_length: 40960
+    max_prompt_tokens: null
+    max_completion_tokens: 36864
+    source_hf_id: Qwen/Qwen3-14B
+    source: https://openrouter.ai/api/v1/models/qwen/qwen3-14b/endpoints
+- name: phi-4
+  model_id: microsoft/phi-4
+  revision: 2db69c1c3e91a05d2c64a3185acfbaf36f744e25
+  parameters_b: 14.66
+  chat_template_kwargs: {}
+  engine_kwargs:
+    max_model_len: 16384
+    dtype: bfloat16
+  gpus: 1
+  gpu_type: rtx_pro_6000
+  pricing:
+    input_per_1m: 0.07
+    output_per_1m: 0.14
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: microsoft/phi-4
+    provider: DeepInfra
+    endpoint: deepinfra/bf16
+    quantization: bf16
+    context_length: 16384
+    max_prompt_tokens: 4096
+    max_completion_tokens: 14745
+    source_hf_id: microsoft/phi-4
+    source: https://openrouter.ai/api/v1/models/microsoft/phi-4/endpoints
+- name: mistral-small-24b
+  model_id: mistralai/Mistral-Small-24B-Instruct-2501
+  revision: 9527884be6e5616bdd54de542f9ae13384489724
+  parameters_b: 23.572
+  chat_template_kwargs: {}
+  engine_kwargs:
+    max_model_len: 16384
+    dtype: bfloat16
+  gpus: 1
+  gpu_type: rtx_pro_6000
+  pricing:
+    input_per_1m: 0.05
+    output_per_1m: 0.08
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: mistralai/mistral-small-24b-instruct-2501
+    provider: DeepInfra
+    endpoint: deepinfra/fp8
+    quantization: fp8
+    context_length: 32768
+    max_prompt_tokens: null
+    max_completion_tokens: 16384
+    source_hf_id: mistralai/Mistral-Small-24B-Instruct-2501
+    source: https://openrouter.ai/api/v1/models/mistralai/mistral-small-24b-instruct-2501/endpoints
+- name: gemma-3-27b
+  model_id: google/gemma-3-27b-it
+  revision: 005ad3404e59d6023443cb575daa05336842228a
+  parameters_b: 27.432
+  chat_template_kwargs: {}
+  engine_kwargs:
+    max_model_len: 16384
+    dtype: bfloat16
+  hf_loader: multimodal_lm
+  gpus: 1
+  gpu_type: rtx_pro_6000
+  pricing:
+    input_per_1m: 0.08
+    output_per_1m: 0.16
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: google/gemma-3-27b-it
+    provider: DeepInfra
+    endpoint: deepinfra/fp8
+    quantization: fp8
+    context_length: 131072
+    max_prompt_tokens: null
+    max_completion_tokens: 16384
+    source_hf_id: google/gemma-3-27b-it
+    source: https://openrouter.ai/api/v1/models/google/gemma-3-27b-it/endpoints
+- name: qwen2.5-coder-32b
+  model_id: Qwen/Qwen2.5-Coder-32B-Instruct
+  revision: 381fc969f78efac66bc87ff7ddeadb7e73c218a7
+  parameters_b: 32.764
+  chat_template_kwargs: {}
+  engine_kwargs:
+    max_model_len: 16384
+    dtype: bfloat16
+  gpus: 1
+  gpu_type: rtx_pro_6000
+  pricing:
+    input_per_1m: 0.66
+    output_per_1m: 1.0
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: qwen/qwen-2.5-coder-32b-instruct
+    provider: Cloudflare
+    endpoint: cloudflare
+    quantization: unknown
+    context_length: 32768
+    max_prompt_tokens: null
+    max_completion_tokens: 29491
+    source_hf_id: Qwen/Qwen2.5-Coder-32B-Instruct
+    source: https://openrouter.ai/api/v1/models/qwen/qwen-2.5-coder-32b-instruct/endpoints
+- name: qwen3-32b
+  model_id: Qwen/Qwen3-32B
+  revision: 9216db5781bf21249d130ec9da846c4624c16137
+  parameters_b: 32.762
+  chat_template_kwargs:
+    enable_thinking: false
+  generation:
+    max_new_tokens: 16384
+  engine_kwargs:
+    max_model_len: 32768
+    dtype: bfloat16
+  gpus: 1
+  gpu_type: rtx_pro_6000
+  pricing:
+    input_per_1m: 0.08
+    output_per_1m: 0.28
+    currency: USD
+    snapshot_date: '2026-10-19'
+    openrouter_id: qwen/qwen3-32b
+    provider: DeepInfra
+    endpoint: deepinfra/fp8
+    quantization: fp8
+    context_length: 40960
+    max_prompt_tokens: null
+    max_completion_tokens: 16384
+    source_hf_id: Qwen/Qwen3-32B
+    source: https://openrouter.ai/api/v1/models/qwen/qwen3-32b/endpoints
