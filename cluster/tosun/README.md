@@ -72,7 +72,7 @@ For the next collection use `configs/benchmarks/shared_v5_pilot.yaml`, then
 `configs/benchmarks/shared_v5.yaml`. V5 uses non-thinking Qwen3 and 16384 output / 32768 total context across the pool, except Phi-4 (12288 / 16384); actual prompt room further limits output. Only known ArmoRM context overflows and absent final-answer reward scores may remain missing. The frozen v3 tariffs and member assignments are reused. Actual measured tokens determine cost. `collection_team` selects `team_v3.yaml`: four priced models per
 member, with each 12B+ model requesting one `rtx_pro_6000` 96GB GPU. Generation is BF16 locally;
 OpenRouter tariffs only simulate estimated API USD. Accept the Llama/Gemma licenses assigned to you.
-İbrahim G’s v3 pilots are checked; fresh v5 GPU pilots are pending; see the [walkthrough](../../docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
+İbrahim G’s four v5 pilots are validated (240 responses, two declared ArmoRM overflows); full collection preparation started, while the other members’ pilots remain pending; see the [walkthrough](../../docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
 V1/v2/v3 configs and their artifacts remain unchanged.
 
 We are three members with four models each; the assignment is in [`team_v3.yaml`](team_v3.yaml) and the team
