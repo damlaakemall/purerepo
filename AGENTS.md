@@ -21,7 +21,7 @@ A **learning project** at Sabancı University. The team re-implements LLM routin
 | `llm_routing/legacy_pipeline/` | older single-user pipeline (`ours_v1`); not used for team data. Its `scorers.py` `bartscore` is the paper's reference-based variant, not the `shared_v1` channel |
 | `llm_routing/runner.py`, `cli.py` | the single train + evaluate procedure, and the `llmr` command |
 | `llm_routing/contract.py` | `llmr check-router`: the fairness checks every router must pass (test labels unused, dynamic-pool boundary, valid decisions) |
-| `configs/` | `benchmarks/` (`shared_v4.yaml` for the next collection (non-thinking Qwen and larger output budgets); `synthetic_shared_v3.yaml` = CPU development data; v1/v2 kept), `model_pools/team_v4.yaml` (12 priced models; v3 tariffs retained), `routers/`, `experiments/` |
+| `configs/` | `benchmarks/` (`shared_v5.yaml` for the next collection (non-thinking Qwen and larger output budgets); `synthetic_shared_v3.yaml` = CPU development data; v1/v2 kept), `model_pools/team_v5.yaml` (12 priced models; v3 tariffs retained), `routers/`, `experiments/` |
 | `cluster/tosun/` | SLURM scripts for Tosun; start with its README. `team_v3.yaml`: which of the 3 members collects which 4 models for v3 |
 | `docs/concepts/` | routing fundamentals, comparison, benchmarks, evaluation metrics (English) |
 | `docs/team/` | team workflow, `shared_v1` data protocol, router contract (Turkish) |
@@ -46,9 +46,9 @@ CI (`.github/workflows/`) runs the tests, both CPU training smokes, the router c
 the collection smoke. Real generation and scoring only run on Tosun GPUs:
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v4_pilot.yaml <member> 1    # 30-query pilot of a member's 4 models
-bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v4_pilot.yaml <model> <member> 1   # or one model
-python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v4_pilot.yaml <model> <member>    # check it before packaging
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_pilot.yaml <member> 1    # 30-query pilot of a member's 4 models
+bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v5_pilot.yaml <model> <member> 1   # or one model
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v5_pilot.yaml <model> <member>    # check it before packaging
 ```
 
 Setup, GPUs and known Tosun problems: [cluster/tosun/README.md](cluster/tosun/README.md) and [docs/walkthrough/01_egitim_verisi.md](docs/walkthrough/01_egitim_verisi.md).

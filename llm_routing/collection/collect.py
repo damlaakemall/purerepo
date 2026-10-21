@@ -7,7 +7,7 @@ import re
 import time
 from pathlib import Path
 
-from . import CHANNELS, PROTOCOL, is_scored
+from . import CHANNELS, PROTOCOL, is_scored, ArmoRMContextOverflow, NoFinalAnswer, allowed_missing_score
 from .backends import Generator
 from .dataset import load_dataset, model_pool
 from .io import append, digest, environment, key, locked, read_jsonl, recover_tail, successful, write_json
@@ -16,10 +16,12 @@ from .io import append, digest, environment, key, locked, read_jsonl, recover_ta
 def generation_config(cfg, model):
     g = {"k": 1, "engine": "vllm", "temperature": 0.7, "top_p": 0.95, "max_new_tokens": 512,
          **cfg.get("generation", {}), **model.get("generation", {})}
-    if set(g) - {"k", "engine", "temperature", "top_p", "max_new_tokens"}:
-        raise ValueError(f"unknown generation parameters: {set(g) - {'k', 'engine', 'temperature', 'top_p', 'max_new_tokens'}}")
+    if set(g) - {"k", "engine", "temperature", "top_p", "max_new_tokens", "context_policy"}:
+        raise ValueError(f"unknown generation parameters: {set(g) - {'k', 'engine', 'temperature', 'top_p', 'max_new_tokens', 'context_policy'}}")
     if type(g["k"]) is not int or g["k"] < 1 or g["max_new_tokens"] < 1 or g["temperature"] < 0 or not 0 < g["top_p"] <= 1:
         raise ValueError("invalid generation parameters")
+    if g.get("context_policy", "error") not in ("error", "cap_output"):
+        raise ValueError("context_policy must be error or cap_output")
     return g
 
 
@@ -134,8 +136,8 @@ _UNCLOSED = re.compile(r"<\s*(" + "|".join(REASONING_TAGS) + r")\s*>.*\Z", re.S 
 def answer_text(text, policy):
     if policy == "raw":
         return text
-    if policy != "strip_think":
-        raise ValueError("text_policy must be raw or strip_think")
+    if policy not in ("strip_think", "final_only"):
+        raise ValueError("text_policy must be raw, strip_think or final_only")
     return _UNCLOSED.sub(" ", _CLOSED.sub(" ", text or "")).strip()
 
 
@@ -164,7 +166,7 @@ class ArmoRM:
         tokens = self.tok.apply_chat_template(messages, return_tensors="pt", return_dict=False).to(self.model.device)
         limit = self.model.config.max_position_embeddings
         if tokens.shape[-1] > limit:
-            raise ValueError(f"ArmoRM context overflow: {tokens.shape[-1]} > {limit}; no silent truncation")
+            raise ArmoRMContextOverflow(int(tokens.shape[-1]), int(limit))
         with torch.inference_mode():
             out = self.model(tokens)
         return float(out.score.item()), {"rewards": out.rewards.flatten().float().cpu().tolist(),
@@ -213,6 +215,8 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
     options = dict(cfg.get("scoring", {}).get(scorer, {}))
     policy = options.pop("text_policy", "strip_think")
     evaluator_spec = {"scorer": scorer, "options": options, "text_policy": policy, "protocol": PROTOCOL}
+    if scorer == "armorm" and options.get("on_context_overflow", "error") not in ("error", "missing"):
+        raise ValueError("on_context_overflow must be error or missing")
     evaluator_id = digest(evaluator_spec)
     scoring_environment = environment()
     with locked(path / ".writer.lock"):
@@ -232,7 +236,7 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
                 continue
             if r["run_id"] != digest(spec) or r["response_hash"] != response_hash(r) or r["query_id"] not in by_id:
                 raise ValueError("response provenance mismatch")
-            if k in done and done[k]["success"]:
+            if k in done and (done[k]["success"] or allowed_missing_score(cfg, scorer, done[k])):
                 if done[k]["response_hash"] != r["response_hash"]:
                     raise ValueError("stale score bound to a different response")
                 continue
@@ -242,7 +246,7 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
             record = {"query_id": k[0], "model": k[1], "sample_id": k[2], "response_hash": r["response_hash"],
                       "dataset_id": spec["dataset_id"], "evaluator_id": evaluator_id, "evaluator": evaluator_spec, "environment": scoring_environment}
             if scorer == "armorm" and evaluator is None:
-                evaluator = ArmoRM(**options)
+                evaluator = ArmoRM(**{k: v for k, v in options.items() if k != "on_context_overflow"})
             if scorer == "bartscore" and evaluator is None:
                 evaluator = BARTScore(**options)
             try:
@@ -250,6 +254,8 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
                 if scorer in ("armorm", "bartscore"):
                     # As the reference: if nothing is left after the trace (a truncated reasoning
                     # model), rate the raw text. An empty response would otherwise get BART's best score.
+                    if policy == "final_only" and not text:
+                        raise NoFinalAnswer("no final answer outside the reasoning trace")
                     value, details = evaluator(query["query"], text or r["response"])
                 elif not text:
                     # Empty, or reasoning and nothing after: the model answered nothing, which is wrong
@@ -268,6 +274,16 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
                 if not math.isfinite(value):
                     raise ValueError("nonfinite quality score")
                 record.update(score=value, details=details, success=True, error=None)
+            except NoFinalAnswer as e:
+                record.update(score=None, details={"reason": "no_final_answer"},
+                              success=False, error=f"{type(e).__name__}: {e}")
+                if not allowed_missing_score(cfg, scorer, record):
+                    errors += 1
+            except ArmoRMContextOverflow as e:
+                record.update(score=None, details={"reason": "context_overflow", "tokens": e.tokens, "limit": e.limit},
+                              success=False, error=f"{type(e).__name__}: {e}")
+                if not allowed_missing_score(cfg, scorer, record):
+                    errors += 1
             except Exception as e:
                 record.update(score=None, details={}, success=False, error=f"{type(e).__name__}: {e}")
                 errors += 1
