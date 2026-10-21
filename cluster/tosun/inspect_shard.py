@@ -14,6 +14,7 @@ import statistics
 from collections import Counter, defaultdict
 
 from llm_routing.config import load_benchmark_config
+from llm_routing.collection import allowed_missing_score
 from llm_routing.collection.collect import answer_text, job_spec
 from llm_routing.collection.io import read_jsonl
 
@@ -50,8 +51,10 @@ def main():
         if (path / f"{channel}.jsonl").exists():
             rows = read_jsonl(path / f"{channel}.jsonl")
             scores[channel] = by_key(rows)
-            failed = [r["error"] for r in rows if not r["success"]]
-            print(f"{channel}: {len(scores[channel])} scored, {len(failed)} errors" + (f" e.g. {failed[0]}" if failed else ""))
+            declared = [r for r in rows if allowed_missing_score(cfg, channel, r)]
+            failed = [r["error"] for r in rows if not r["success"] and not allowed_missing_score(cfg, channel, r)]
+            print(f"{channel}: {len(scores[channel])} scored, {len(declared)} declared missing, {len(failed)} errors"
+                  + (f" e.g. {failed[0]}" if failed else ""))
 
     print("\nper source (mean)")
     per = defaultdict(lambda: defaultdict(list))
