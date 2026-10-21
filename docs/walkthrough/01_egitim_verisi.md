@@ -115,11 +115,26 @@ Token ayrımı 240 örneğin tamamında generated_ids olarak çözüldü; etiket
 Pilot generation / package iş numaraları sırasıyla Qwen32 **4115805 / 4115809**,
 Qwen14 **4115810 / 4115814**, Nemo **4115824 / 4115828**, Llama
 **4115829 / 4115833**. Dört paket sonrasındaki **4115834** doğrulama işi başarılı
-olunca **4121890** tam soru setini hazırlama işini başlattı. Bu kayıt sırasında
-tam veri soru seti compute node’da hazırlanıyordu; tam generation’ın başlamış
-veya tamamlanmış olduğu henüz iddia edilmiyor. Hazırlık başarılı olduktan sonra
-aynı iş şu komutla **yalnız İbrahim G’nin dört modelini**, her biri dört shard
-olacak şekilde kuyruğa gönderir:
+olunca **4121890** tam soru setini compute node’da hazırladı ve tam üretim
+zincirlerini gönderdi. Donmuş tam set **7652 soru** içeriyor: train **4633**,
+val **753**, test **2266**. Dataset kimliği
+`664b6fe9a7e07132f88ef219d1315415010abc4924e9c565539489ccc81a5e0a`.
+Kaynak sayıları: Alpaca 1000, BBH 2160, GSM8K 1319, MBPP 499,
+MMLU-Pro 1500, Multi-News 500, OlympiadBench 674.
+Her soru k=10 ile yanıtlanacak: model başına **76520**, İbrahim G’nin dört modeli
+için toplam **306080 planlanan cevap**. Bu sayılar tamamlanmış üretim sayısı değildir.
+Her model dört shard’a ayrıldı; ilk kontrolde Qwen32’nin bir ve Llama’nın iki
+shard’ı çalışıyor, kalanlar GPU kuyruğunda bekliyordu.
+
+| model | generation array | GT | ArmoRM | BARTScore | package |
+|---|---:|---:|---:|---:|---:|
+| Qwen3-32B | 4121891 | 4121892 | 4121893 | 4121894 | 4121895 |
+| Qwen3-14B | 4121897 | 4121898 | 4121899 | 4121900 | 4121901 |
+| Mistral-Nemo-12B | 4121902 | 4121903 | 4121904 | 4121905 | 4121906 |
+| Llama-3.2-3B | 4121907 | 4121908 | 4121909 | 4121910 | 4121911 |
+
+Generation ve puanlama array’leri `0-3` shard’larını kapsar; paket işi bunların
+başarısına bağlıdır. Tam setin build ve gönderiminde kullanılan komutlar:
 
 ```bash
 # ~/purerepo-v5-all-models içinde logs/v5-full.sh (compute node):
