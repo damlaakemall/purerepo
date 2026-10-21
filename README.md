@@ -22,15 +22,15 @@ place where we deviate ([CONTRIBUTING.md → Keep it simple](CONTRIBUTING.md#kee
 
 ## Where we are now
 
-The next collection is **`shared_v5`** (new pilot pending; v3/v4 stay frozen): 12 local open models with publicly verifiable, frozen
+The next collection is **`shared_v5`** (İbrahim G’s pilots validated; his four-model full collection running; v3/v4 stay frozen): 12 local open models with publicly verifiable, frozen
 OpenRouter provider tariffs. Six v2 models are retained and six are replaced. Costs are **estimated
 API USD**, computed from local input/output token counts, not a Tosun bill. Generation stays on Tosun,
-with `top_p: 1.0`; v5 disables Qwen3 thinking across the pool and uses 16384 output tokens (Phi-4: 12288), reserving prompt room within model context; ArmoRM overflows remain missing. Fresh GPU pilots are pending. Existing v1/v2/v3/v4 configs and data
+with `top_p: 1.0`; v5 disables Qwen3 thinking across the pool and uses 16384 output tokens (Phi-4: 12288), reserving prompt room within model context; ArmoRM overflows remain missing. İbrahim G’s four v5 GPU pilots passed the collection checks; the other members’ eight models still need pilots. Existing v1/v2/v3/v4 configs and data
 stay intact. See [the pool, prices and procedure](docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
 
 | | status |
 |---|---|
-| Shared collection protocol | CPU tested; v3 pilots checked, new pool-wide v5 pilots pending |
+| Shared collection protocol | Four v5 GPU pilots validated (240 responses; 2 declared missing ArmoRM scores); İbrahim G’s four-model full collection running |
 | Routers | one baseline: *quality regression* (from RouterBench) |
 | Planned paper routers | Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT |
 | Open decisions | mixed quality scales, shared accounts, GPU pilots, Hybrid pair and UniRoute pool split ([DECISIONS.md](DECISIONS.md)) |

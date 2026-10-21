@@ -68,7 +68,7 @@ eksik bırak” seçeneğini seçti. V5’in `on_context_overflow: missing` poli
 **110 CPU testi geçti** (75.95 s); uçtan uca test-double koleksiyonunda 30 soru,
 120 cevap ve doğrulanmış release üretildi. Testler, eksik ArmoRM ile tam GT/maliyet korunmasını; yalnız düşünceyi reward
 puanlayıcısına göndermemeyi; diğer hataların gizlenmemesini ve token ID ayrımını
-kontrol eder. Gerçek v5 GPU pilot sonucu henüz bekleniyor. V4 tek örnek Llama
+kontrol eder. Gerçek v5 pilot sonucu aşağıda kaydedilmiştir. V4 tek örnek Llama
 16k bütçe tanısı 965 token’da EOS verdi; tekli batch/çalışma koşulları değiştiği
 ve aynı seed tek başına birebir GPU determinism sağlamadığı için bu sonuç
 “bütçe artışı kesin çözdü” kanıtı veya seçilmiş replacement sample değildir.
@@ -82,6 +82,71 @@ python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v5_pilot.yaml qw
 # Her modelde tam üretim + GT/BART tamamlanması, ArmoRM başarı/izinli eksik
 # ayrımı ve kesilme oranı kontrol edilir. Başarılı örnek seçilerek tekrar üretilmez.
 ```
+
+### İbrahim G’nin doğrulanan v5 pilotu ve tam toplama geçişi — 21 Ekim 2026
+
+Aynı 30 donmuş soru dört modelde k=2 ile çalıştırıldı: **240/240 üretim başarılı**,
+GT **240/240**, BARTScore **240/240**, ArmoRM **238/240**. İki ArmoRM eksikliği
+kullanıcının seçtiği `context_overflow` politikasıdır; başka puanlama hatası veya
+boş nihai cevap yoktur. ArmoRM kapsamı **%99,17**; bu iki skora sıfır yazılmadı,
+cevaplar ve token bazlı tahmini maliyetleri veri içinde tutuldu.
+
+| model | cevap | stop / length | en uzun çıktı | GT / ArmoRM / BART | tahmini API USD |
+|---|---:|---:|---:|---:|---:|
+| Qwen3-32B | 60 | 60 / 0 | 3519 | 60 / 60 / 60 | 0.00932252 |
+| Qwen3-14B | 60 | 60 / 0 | 4662 | 60 / 60 / 60 | 0.00748058 |
+| Mistral-Nemo-12B | 60 | 59 / 1 | 16384 | 60 / 59 / 60 | 0.00127309 |
+| Llama-3.2-3B | 60 | 60 / 0 | 11827 | 60 / 59 / 60 | 0.01093005 |
+
+Toplam **118111 output token** ve **0.02900624 estimated API USD** ölçüldü;
+bu değer Tosun GPU gideri veya provider faturası değildir. Model başına ham
+hesap, `logs/v5-pilot-report.json` içinde daha yüksek hassasiyetle saklanır.
+Mistral’ın bir cevabı 16384 tavanında kesildi; bu cevap seçilerek tekrar
+üretilmedi veya paket dışına atılmadı. Llama’daki uzun cevap doğal stop verdi
+fakat açıklama uzayıp bozuldu; doğal stop doğruluk/kalite garantisi değildir.
+İki durumda da ArmoRM sınırı aşan tam metin kırpılmadan korundu.
+
+Dört paketin manifestleri/dosya hash’leri ve donmuş dataset kimliği ayrıca
+doğrulandı. Otomatik kontrol, her modelde 60 cevap ve aynı anahtarlara bağlı
+üç kanalın tam kaydını, yalnız izinli eksikleri, pinned revision’ları, gerçek
+context/etkin çıktı bütçelerini ve Qwen3 non-thinking ayarını denetledi.
+Token ayrımı 240 örneğin tamamında generated_ids olarak çözüldü; etiketli düşünce token sayısı hepsinde sıfırdı. Bu, normal cevabın çözüm açıklaması içermediği anlamına gelmez. Ham cevaplar saklanır.
+
+Pilot generation / package iş numaraları sırasıyla Qwen32 **4115805 / 4115809**,
+Qwen14 **4115810 / 4115814**, Nemo **4115824 / 4115828**, Llama
+**4115829 / 4115833**. Dört paket sonrasındaki **4115834** doğrulama işi başarılı
+olunca **4121890** tam soru setini compute node’da hazırladı ve tam üretim
+zincirlerini gönderdi. Donmuş tam set **7652 soru** içeriyor: train **4633**,
+val **753**, test **2266**. Dataset kimliği
+`664b6fe9a7e07132f88ef219d1315415010abc4924e9c565539489ccc81a5e0a`.
+Kaynak sayıları: Alpaca 1000, BBH 2160, GSM8K 1319, MBPP 499,
+MMLU-Pro 1500, Multi-News 500, OlympiadBench 674.
+Her soru k=10 ile yanıtlanacak: model başına **76520**, İbrahim G’nin dört modeli
+için toplam **306080 planlanan cevap**. Bu sayılar tamamlanmış üretim sayısı değildir.
+Her model dört shard’a ayrıldı; ilk kontrolde Qwen32’nin bir ve Llama’nın iki
+shard’ı çalışıyor, kalanlar GPU kuyruğunda bekliyordu.
+
+| model | generation array | GT | ArmoRM | BARTScore | package |
+|---|---:|---:|---:|---:|---:|
+| Qwen3-32B | 4121891 | 4121892 | 4121893 | 4121894 | 4121895 |
+| Qwen3-14B | 4121897 | 4121898 | 4121899 | 4121900 | 4121901 |
+| Mistral-Nemo-12B | 4121902 | 4121903 | 4121904 | 4121905 | 4121906 |
+| Llama-3.2-3B | 4121907 | 4121908 | 4121909 | 4121910 | 4121911 |
+
+Generation ve puanlama array’leri `0-3` shard’larını kapsar; paket işi bunların
+başarısına bağlıdır. Tam setin build ve gönderiminde kullanılan komutlar:
+
+```bash
+# ~/purerepo-v5-all-models içinde logs/v5-full.sh (compute node):
+llmr build-queries configs/benchmarks/shared_v5.yaml
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5.yaml ibrahimg 4
+```
+
+Tam toplama gönderim numaraları `logs/v5-full-submissions.txt` dosyasına yazılır;
+mükerrer job göndermeden bu dosya ve `squeue` kontrol edilir. Donmuş Python
+kaynakları çalışma sırasında değiştirilmez; sonraki doc commit’leri kaynak
+hash’ini değiştirmek için çalışan checkout’a pull edilmez. Diğer üyelerin
+sekiz modeli bu pilotla doğrulanmış sayılmaz; kendi pilotları gereklidir.
 
 ## shared_v4: referansın düşünmesiz Qwen ayarı ve daha uzun cevap bütçesi
 
@@ -127,7 +192,7 @@ bütünse, cevaplar doğal EOS ile bitmişse ve düşünce temizliği sonrası b
 yoksa tam v4 soru setini compute node’da build edip yalnız İbrahim G’nin dört
 modelini 4 shard ile gönderir. Devam eden kesilmede tam toplamayı başlatmaz;
 tekrarlı çıktı ile anlamlı devam ayrıştırılarak yeni bütçe/sürüm değerlendirilir.
-Gerçek v4 GPU pilot sonucu henüz bekleniyor; v3 sayıları v4 sonucu olarak kullanılamaz.
+V4 tam toplama başlatılmadı: Llama’nın 8309 token’lık ArmoRM girdisi 8192 sınırını aştı. Bu durum için kullanıcının eksik-skor kararı ve havuz geneli bütçeler v5’te uygulanır; v3 sayıları v4/v5 sonucu olarak kullanılamaz.
 
 ```bash
 export LLMR_REPO="$HOME/purerepo-v4-nonthinking"
