@@ -20,3 +20,30 @@ def is_scored(channel, query):
     if channel == "ground_truth":
         return bool(query.get("answer_type"))
     return True
+
+
+class ArmoRMContextOverflow(ValueError):
+    """A known scoring boundary, distinct from a broken scorer or GPU failure."""
+    def __init__(self, tokens, limit):
+        self.tokens, self.limit = tokens, limit
+        super().__init__(f"ArmoRM context overflow: {tokens} > {limit}; no silent truncation")
+
+
+class NoFinalAnswer(ValueError):
+    """The model produced no text outside its reasoning trace."""
+
+
+def allowed_missing_score(cfg, channel, record):
+    """Only opted-in context overflows or absent final answers may remain missing."""
+    details = record.get("details", {})
+    tokens, limit = details.get("tokens"), details.get("limit")
+    if (channel in ("armorm", "bartscore")
+            and cfg.get("scoring", {}).get(channel, {}).get("text_policy") == "final_only"
+            and record.get("success") is False and record.get("score") is None
+            and details.get("reason") == "no_final_answer"):
+        return True
+    return (channel == "armorm"
+            and cfg.get("scoring", {}).get(channel, {}).get("on_context_overflow") == "missing"
+            and record.get("success") is False and record.get("score") is None
+            and details.get("reason") == "context_overflow"
+            and type(tokens) is int and type(limit) is int and tokens > limit > 0)

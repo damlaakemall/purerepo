@@ -21,6 +21,41 @@ def messages_for(model, query):
     return messages + [{"role": "user", "content": query}]
 
 
+def reasoning_token_counts(ids, tokenizer, text, prefix=""):
+    """Partition the actual generated IDs; tag tokens count as reasoning.
+
+    No re-tokenized substring estimates: unsupported tag spellings/encodings
+    return null counts. The measured completion total remains authoritative.
+    """
+    tags = ("think", "thinking", "reasoning")
+    patterns = {tag: (tokenizer.encode(f"<{tag}>", add_special_tokens=False),
+                      tokenizer.encode(f"</{tag}>", add_special_tokens=False)) for tag in tags}
+    markers = re.findall(r"<\s*/?\s*(?:think|thinking|reasoning)\s*>", text, re.I)
+    canonical = {f"<{t}>" for t in tags} | {f"</{t}>" for t in tags}
+    if any(marker not in canonical for marker in markers):
+        return {"reasoning_tokens": None, "answer_tokens": None, "token_partition": "unavailable"}
+    opened = re.search(r"<(think|thinking|reasoning)>\s*$", prefix)
+    active = opened.group(1) if opened else None
+    matches, count, i = 0, 0, 0
+    while i < len(ids):
+        candidates = [(active, patterns[active][1])] if active else [(t, patterns[t][0]) for t in tags]
+        found = next(((tag, pattern) for tag, pattern in candidates
+                      if pattern and ids[i:i + len(pattern)] == pattern), None)
+        if found:
+            tag, pattern = found
+            count += len(pattern)
+            i += len(pattern)
+            active = None if active else tag
+            matches += 1
+        else:
+            count += bool(active)
+            i += 1
+    if len(markers) != matches:
+        return {"reasoning_tokens": None, "answer_tokens": None, "token_partition": "unavailable"}
+    return {"reasoning_tokens": count, "answer_tokens": len(ids) - count,
+            "token_partition": "generated_ids", "reasoning_closed": active is None}
+
+
 class Generator:
     def __init__(self, model, generation):
         self.model, self.generation = model, generation
@@ -105,15 +140,24 @@ class Generator:
         prepared = []
         for query, seed in items:
             try:
-                prepared.append(self._prompt(query, seed))
+                ids, meta = self._prompt(query, seed)
+                if g.get("context_policy") == "cap_output":
+                    context = self.model.get("engine_kwargs", {}).get("max_model_len")
+                    if type(context) is not int or context <= len(ids):
+                        raise ValueError("prompt leaves no output room in configured model context")
+                    # Preserve the entire prompt. Phi-4 has only 16k TOTAL context;
+                    # its output allowance must reserve space for this query.
+                    meta["effective_max_new_tokens"] = min(g["max_new_tokens"], context - len(ids))
+                    meta["context_limited"] = meta["effective_max_new_tokens"] < g["max_new_tokens"]
+                prepared.append((ids, meta))
             except Exception as e:  # one malformed prompt must not sink the batch
                 prepared.append(e)
         if self.engine != "vllm":
             return [p if isinstance(p, Exception) else self._hf(*p, seed=s) for p, (_, s) in zip(prepared, items)]
         from vllm import SamplingParams
         live = [(i, p) for i, p in enumerate(prepared) if not isinstance(p, Exception)]
-        params = [SamplingParams(n=1, temperature=g["temperature"], top_p=g["top_p"], max_tokens=g["max_new_tokens"],
-                                 seed=items[i][1]) for i, _ in live]
+        params = [SamplingParams(n=1, temperature=g["temperature"], top_p=g["top_p"], max_tokens=p[1].get("effective_max_new_tokens", g["max_new_tokens"]),
+                                 seed=items[i][1]) for i, p in live]
         start = time.perf_counter()
         try:
             outputs = self.llm.generate([{"prompt_token_ids": p[0]} for _, p in live], params, use_tqdm=False) if live else []
@@ -123,7 +167,8 @@ class Generator:
         results = list(prepared)
         for (i, (_, meta)), out, p in zip(live, outputs, params):
             o = out.outputs[0]
-            results[i] = (meta["response_prefix"] + o.text, {**meta, "sampling_params": str(p), "completion_tokens": len(o.token_ids),
+            partition = reasoning_token_counts(list(o.token_ids), self.tok, o.text, meta["response_prefix"])
+            results[i] = (meta["response_prefix"] + o.text, {**meta, **partition, "sampling_params": str(p), "completion_tokens": len(o.token_ids),
                                    "finish_reason": o.finish_reason, "batch_size": len(live),
                                    "batch_seconds_per_sample": per_sample})
         return results
@@ -135,7 +180,7 @@ class Generator:
         try:
             set_seed(seed)
             inputs = torch.tensor([ids], device=self.llm.device)
-            kwargs = {"max_new_tokens": g["max_new_tokens"], "do_sample": g["temperature"] > 0}
+            kwargs = {"max_new_tokens": meta.get("effective_max_new_tokens", g["max_new_tokens"]), "do_sample": g["temperature"] > 0}
             if kwargs["do_sample"]:
                 kwargs.update(temperature=g["temperature"], top_p=g["top_p"])
             meta["effective_generation"] = {**self.llm.generation_config.to_dict(), **kwargs}
@@ -143,10 +188,12 @@ class Generator:
             with torch.inference_mode():
                 seq = self.llm.generate(input_ids=inputs, attention_mask=torch.ones_like(inputs),
                                         pad_token_id=self.tok.eos_token_id, **kwargs)[0, len(ids):]
-            meta.update(completion_tokens=len(seq), finish_reason="length" if len(seq) == g["max_new_tokens"] else "stop",
+            meta.update(completion_tokens=len(seq), finish_reason="length" if len(seq) == kwargs["max_new_tokens"] else "stop",
                         resolved_revision=getattr(self.llm.config, "_commit_hash", None), batch_size=1,
                         batch_seconds_per_sample=time.perf_counter() - start)
-            return meta["response_prefix"] + self.tok.decode(seq, skip_special_tokens=True), meta
+            text = self.tok.decode(seq, skip_special_tokens=True)
+            meta.update(reasoning_token_counts(seq.tolist(), self.tok, text, meta["response_prefix"]))
+            return meta["response_prefix"] + text, meta
         except Exception as e:
             return e
 

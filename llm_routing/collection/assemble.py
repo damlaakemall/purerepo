@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from ..data.benchmark import Benchmark, safe_name
-from . import CHANNELS, PROTOCOL, channels, is_scored
+from . import CHANNELS, PROTOCOL, channels, is_scored, allowed_missing_score
 from .collect import generation_config, job_spec, response_hash
 from .dataset import load_dataset, model_pool
 from .io import digest, environment, key, locked, read_jsonl, seal, successful, verify, write_json
@@ -174,6 +174,7 @@ def assemble(cfg):
     if set(required) - set(scores):
         raise ValueError("unknown required scoring channel")
     missing = []
+    allowed_missing = {c: 0 for c in scores}
     for q in rows:
         for m in models:
             for sid in range(generation_config(cfg, models[m])["k"]):
@@ -185,7 +186,10 @@ def assemble(cfg):
                 for channel in required:
                     if not is_scored(channel, q):
                         continue
-                    if not scores[channel].get(k, {}).get("success"):
+                    record = scores[channel].get(k, {})
+                    if allowed_missing_score(cfg, channel, record):
+                        allowed_missing[channel] += 1
+                    elif not record.get("success"):
                         missing.append((k, channel))
     if missing and not cfg.get("allow_partial", False):
         raise ValueError(f"incomplete collection: {len(missing)} missing/failed items, e.g. {missing[:3]}")
@@ -252,7 +256,8 @@ def assemble(cfg):
                 b.save(str(tmp / "views" / channel), with_responses=False)
             seal(tmp, {"protocol": PROTOCOL, "version": cfg["version"], "dataset_id": dataset["dataset_id"],
                        "models": names, "channels": list(scores), "config_hash": digest(release_spec(cfg)), "n_rows": len(long), "missing_items": len(missing),
-                       "content_hash": _long_content_hash(long), "environment": environment()})
+                       "content_hash": _long_content_hash(long), "environment": environment(),
+                       "allowed_missing_scores": allowed_missing})
             validate_release(tmp)
             tmp.rename(target)
     return load_view(cfg)

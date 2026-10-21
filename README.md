@@ -22,15 +22,15 @@ place where we deviate ([CONTRIBUTING.md → Keep it simple](CONTRIBUTING.md#kee
 
 ## Where we are now
 
-The next collection is **`shared_v4`** (new pilot pending; v3 stays frozen): 12 local open models with publicly verifiable, frozen
+The next collection is **`shared_v5`** (new pilot pending; v3/v4 stay frozen): 12 local open models with publicly verifiable, frozen
 OpenRouter provider tariffs. Six v2 models are retained and six are replaced. Costs are **estimated
 API USD**, computed from local input/output token counts, not a Tosun bill. Generation stays on Tosun,
-with `top_p: 1.0`; v4 disables Qwen3-32B thinking and gives Qwen3-32B/Mistral-Nemo up to 16384 output tokens (others 8192). Fresh GPU pilots are pending. Existing v1/v2/v3 configs and data
+with `top_p: 1.0`; v5 disables Qwen3 thinking across the pool and uses 16384 output tokens (Phi-4: 12288), reserving prompt room within model context; ArmoRM overflows remain missing. Fresh GPU pilots are pending. Existing v1/v2/v3/v4 configs and data
 stay intact. See [the pool, prices and procedure](docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
 
 | | status |
 |---|---|
-| Shared collection protocol | CPU tested; v3 pilots checked, new v4 non-thinking/longer-budget pilots pending |
+| Shared collection protocol | CPU tested; v3 pilots checked, new pool-wide v5 pilots pending |
 | Routers | one baseline: *quality regression* (from RouterBench) |
 | Planned paper routers | Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT |
 | Open decisions | mixed quality scales, shared accounts, GPU pilots, Hybrid pair and UniRoute pool split ([DECISIONS.md](DECISIONS.md)) |
@@ -79,12 +79,12 @@ shares the dataset once and assembles everyone's bundles at the end. The steps a
 [team guide (Türkçe)](docs/team/team_workflow.md#0-üç-kişiyiz-kim-ne-yapar).
 
 Do the one-time setup in [cluster/tosun/README.md](cluster/tosun/README.md), then always start with the
-30-query v4 pilot:
+30-query v5 pilot:
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v4_pilot.yaml <member> 1        # pilot, your 4 models
-python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v4_pilot.yaml <model> <member>   # check each one
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v4.yaml <member> 4           # full run
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_pilot.yaml <member> 1        # pilot, your 4 models
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v5_pilot.yaml <model> <member>   # check each one
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5.yaml <member> 4           # full run
 ```
 
 Router training on Tosun uses `bash cluster/tosun/submit_train.sh <experiment.yaml> <num_seeds>`. The only
@@ -95,13 +95,13 @@ pieces they need are in place; the routers themselves are still planned ([how to
 The [training walkthrough (Türkçe)](docs/walkthrough/02_router_egitimi.md) records the checked path from
 an assembled test-double release to training. The three paper implementations and real GPU runs are pending.
 
-## The next shared data (`shared_v4`)
+## The next shared data (`shared_v5`)
 
 - **Questions:** GSM8K, MMLU-Pro, BBH, OlympiadBench, MBPP, Alpaca, Multi-News
-  ([`configs/benchmarks/shared_v4.yaml`](configs/benchmarks/shared_v4.yaml)), split once into
+  ([`configs/benchmarks/shared_v5.yaml`](configs/benchmarks/shared_v5.yaml)), split once into
   train / val / test and frozen.
 - **Models:** 12 open-weight models from 3B to 33B, pinned to exact Hugging Face commits
-  ([`configs/model_pools/team_v4.yaml`](configs/model_pools/team_v4.yaml)). Each answers every question 10 times. Qwen3-32B runs without thinking; it and Mistral-Nemo have a 16384 output ceiling, other models 8192. Actual tokens determine cost.
+  ([`configs/model_pools/team_v5.yaml`](configs/model_pools/team_v5.yaml)). Each answers every question 10 times. V5 uses non-thinking Qwen3 and a 16384 output ceiling across the pool (Phi-4: 12288); prompt space is reserved within each model’s context. Actual tokens determine cost.
 - **Quality**, scored three separate ways that are never mixed: ground truth (answer key, using the
   reference repo's audited evaluators), ArmoRM (a reward model) and BARTScore.
 - **Cost:** frozen input/output tariffs × measured token counts = **estimated API USD**. V1/v2 retain their parameter token proxy. Hosted precision/revisions can differ from local weights; this is a tariff simulation.

@@ -130,3 +130,47 @@ def test_native_mistral_prompt_keeps_native_chat_ids():
     assert ids == [1, 42, 3]
     assert meta["prompt_tokens"] == 3 and meta["prompt_token_ids_hash"] == digest(ids)
     assert meta["tokenizer_revision"] == "pinned" and meta["seed_applied"]
+
+
+def test_output_budget_reserves_prompt_without_truncating_it(monkeypatch):
+    calls, seen = [], []
+    _fake_vllm(monkeypatch, calls, seen)
+    generator = Generator({"model_id": "fake/model", "revision": "pinned",
+                           "chat_template_kwargs": {"enable_thinking": False},
+                           "engine_kwargs": {"max_model_len": 5}},
+                          {"engine": "vllm", "temperature": .7, "top_p": 1., "max_new_tokens": 4,
+                           "context_policy": "cap_output"})
+    # Three prompt tokens leave room for two output tokens, without editing the prompt.
+    _, meta = generator("question", 1)
+    assert meta["prompt_tokens"] == 3 and meta["effective_max_new_tokens"] == 2
+    assert meta["context_limited"] and meta["completion_tokens"] == 2
+    generator.model["engine_kwargs"]["max_model_len"] = 3
+    with pytest.raises(ValueError, match="no output room"):
+        generator("question", 1)
+
+
+@pytest.mark.parametrize("ids,text,prefix,reasoning,answer", [
+    ([10, 3, 4, 11, 5], "<think>work</think>answer", "", 4, 1),
+    ([3, 11, 5], "work</think>answer", "<think>\n", 2, 1),
+    ([10, 3, 4], "<think>unfinished", "", 3, 0),
+    ([3, 4], "ordinary answer", "", 0, 2),
+])
+def test_reasoning_counts_partition_actual_generated_ids(ids, text, prefix, reasoning, answer):
+    from llm_routing.collection.backends import reasoning_token_counts
+    class Tags:
+        def encode(self, text, add_special_tokens):
+            return {"<think>": [10], "</think>": [11], "<thinking>": [12],
+                    "</thinking>": [13], "<reasoning>": [14], "</reasoning>": [15]}[text]
+    meta = reasoning_token_counts(ids, Tags(), text, prefix)
+    assert meta["reasoning_tokens"] == reasoning and meta["answer_tokens"] == answer
+    assert reasoning + answer == len(ids)
+
+
+def test_unresolvable_reasoning_tags_do_not_invent_token_counts():
+    from llm_routing.collection.backends import reasoning_token_counts
+    class Tags:
+        def encode(self, text, add_special_tokens):
+            return [100] if not text.startswith("</") else [101]
+    meta = reasoning_token_counts([2, 3], Tags(), "text</think>answer", "<think>")
+    assert meta["reasoning_tokens"] is None and meta["answer_tokens"] is None
+    assert meta["token_partition"] == "unavailable"

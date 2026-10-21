@@ -406,3 +406,67 @@ def test_release_view_carries_model_info_outside_the_fingerprint(smoke):
     before = bench.fingerprint()
     bench.meta.pop("model_info")
     assert bench.fingerprint() == before
+
+
+def test_declared_armorm_overflow_stays_missing_and_is_not_retried(cfg):
+    from llm_routing.collection import ArmoRMContextOverflow
+    cfg["scoring"]["armorm"]["on_context_overflow"] = "missing"
+    generate(cfg, "tiny", backend=fake, retry_delay=0)
+    score(cfg, "tiny")
+    calls = []
+    def overflow(query, response):
+        calls.append(query)
+        raise ArmoRMContextOverflow(9, 8)
+    path = score(cfg, "tiny", scorer="armorm", evaluator=overflow)
+    assert len(calls) == 10
+    score(cfg, "tiny", scorer="armorm", evaluator=overflow)
+    assert len(calls) == 10
+    records = read_jsonl(path / "armorm.jsonl")
+    assert all(not r["success"] and r["score"] is None for r in records)
+    assert all(r["details"]["reason"] == "context_overflow" for r in records)
+    package(cfg, "tiny")
+    gt = assemble(cfg)
+    rm = load_benchmark({**cfg, "quality_metric": "armorm"})
+    assert np.isfinite(gt.scores).all() and np.isnan(rm.scores).all()
+    assert np.isfinite(gt.costs).all()
+    man = validate_release(frozen_dir(cfg))
+    assert man["missing_items"] == 0 and man["allowed_missing_scores"]["armorm"] == 10
+
+
+@pytest.mark.parametrize("policy", ["error", "missing"])
+def test_armorm_policy_does_not_hide_unrelated_errors(cfg, policy):
+    cfg["scoring"]["armorm"]["on_context_overflow"] = policy
+    generate(cfg, "tiny", backend=fake, retry_delay=0)
+    def broken(query, response):
+        raise ValueError("unrelated failure")
+    with pytest.raises(RuntimeError, match="scoring failures"):
+        score(cfg, "tiny", scorer="armorm", evaluator=broken)
+
+
+def test_armorm_overflow_remains_fatal_without_opt_in(cfg):
+    from llm_routing.collection import ArmoRMContextOverflow
+    generate(cfg, "tiny", backend=fake, retry_delay=0)
+    def overflow(query, response):
+        raise ArmoRMContextOverflow(9, 8)
+    with pytest.raises(RuntimeError, match="scoring failures"):
+        score(cfg, "tiny", scorer="armorm", evaluator=overflow)
+
+
+def test_final_only_never_rates_raw_reasoning_as_an_answer(cfg):
+    cfg["scoring"]["ground_truth"]["text_policy"] = "final_only"
+    cfg["scoring"]["armorm"]["text_policy"] = "final_only"
+    cfg["scoring"]["bartscore"] = {"text_policy": "final_only"}
+    cfg["required_scores"] = ["ground_truth", "armorm", "bartscore"]
+    generate(cfg, "tiny", backend=lambda q, seed: ("<think>unfinished", fake(q, seed)[1]), retry_delay=0)
+    score(cfg, "tiny")
+    def must_not_rate_reasoning(prompt, response):
+        raise AssertionError("reasoning-only text reached reward evaluator")
+    score(cfg, "tiny", scorer="armorm", evaluator=must_not_rate_reasoning)
+    score(cfg, "tiny", scorer="bartscore", evaluator=must_not_rate_reasoning)
+    package(cfg, "tiny")
+    gt = assemble(cfg)
+    assert (gt.scores == 0).all()
+    assert np.isnan(gt.extras["armorm"]).all() and np.isnan(gt.extras["bartscore"]).all()
+    assert np.isfinite(gt.costs).all()
+    manifest = validate_release(frozen_dir(cfg))
+    assert manifest["allowed_missing_scores"] == {"ground_truth": 0, "armorm": 10, "bartscore": 10}

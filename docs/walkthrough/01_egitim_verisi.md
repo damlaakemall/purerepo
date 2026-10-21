@@ -8,6 +8,81 @@
 > **Durum (15 Ekim 2026):** akış hazır ve 30 soruluk bir pilotla gerçek GPU'da uçtan uca doğrulandı. Tam
 > koleksiyon (7652 soru × 12 model × 10 cevap) henüz yapılmadı.
 
+## shared_v5: bütün havuza uygulanan bütçe ve nihai cevap politikası
+
+**21 Ekim 2026 — kullanıcının netleştirdiği ortak karar.** Uzun cevap ve thinking
+politikası yalnız İbrahim G’nin dört modeline değil, 12 modelin tamamına uygulanır.
+Yeni configler `shared_v5.yaml`, `shared_v5_pilot.yaml` ve `model_pools/team_v5.yaml`;
+atamalar aynı `cluster/tosun/team_v3.yaml` dosyasındadır. V3/v4 verisi ve configleri
+korunur. Tosun’da yalnız İbrahim G’nin dört modeli çalıştırılır; diğer üyeler aynı
+ortak configleri kendi hesaplarında kullanır.
+
+| modeller | çıktı tavanı | toplam context | düşünme kontrolü |
+|---|---:|---:|---|
+| Qwen3-14B / Qwen3-32B | 16384 | 32768 | pinned tokenizer şablonunda `enable_thinking: false` |
+| Phi-4 | 12288 | 16384 | ayrı bir thinking anahtarı yok; kendi instruct şablonu |
+| kalan 9 instruct model | 16384 | 32768 | doğrulanmış ayrı anahtar yok; kendi instruct şablonları |
+
+Phi-4’ün gerçek toplam context’i 16384’tür; yalnız config sayılarını büyütmek modelin
+eğitim sınırını büyütmez. `context_policy: cap_output`, tam prompt’u koruyarak
+örnek bazında `min(çıktı_tavanı, toplam_context - prompt_tokens)` uygular. Etkin
+çıktı bütçesi ve context nedeniyle azalıp azalmadığı metadata’da kaydedilir.
+Maliyet yine **gerçek** prompt/output token sayıları × dondurulmuş 2026-10-19
+input/output tarifesidir; bütçe tavanları faturalandırılmış token sayısı değildir.
+Gemma/Llama gated modellerinin indirme erişimini ilgili üyeler kendi hesaplarında
+sağlar; İbrahim’in hesabıyla diğer üyelerin modelleri çalıştırılmadı.
+
+**Thinking ayrımı.** Qwen3 iki modu yerel şablon üzerinden destekler. Diğer
+modellerde sıradan bir uzun açıklamayı gizli düşünce saymak veya etkisiz bir
+`enable_thinking: false` alanı eklemek doğru değildir. `<think>`, `<thinking>`,
+`<reasoning>` gibi tanınan bloklar puanlama görünümünden çıkarılır; ham cevap
+saklanır. V5’te `text_policy: final_only`, yalnız düşünce içeren cevapları
+ArmoRM/BARTScore için ham düşünceye geri döndürmez: GT=0, reward skorları eksik
+kalır. Bu, referansın ham metne geri dönen reward davranışından belgelenmiş bir
+ayrımdır ve kullanıcının yalnız nihai cevaba bakma isteğini uygular.
+
+Token ayrımı yeniden tokenize edilmiş metin parçası tahmini değildir. Üretilen
+gerçek ID dizisindeki tanınan açma/kapama etiketleri üzerinden `reasoning_tokens`
+ve `answer_tokens` kaydedilir; etiket token’ları reasoning’e dahildir. Prompt’un
+sonunda zaten açılmış düşünce etiketi varsa prompt token’ı olarak kalır, output’a
+iki kez sayılmaz. Çözülemeyen etiket yazımı/encoding için iki sayı `null`,
+`token_partition: unavailable` olur; toplam `completion_tokens` yine gerçektir.
+Maliyete düşünme + cevap toplamı girer. Sadece cevabı fiyatlamak yerel üretim
+maliyetini eksik sayardı.
+
+**ArmoRM sınırı.** V4’te bir Llama cevabının soru+cevap girdisi 8309 token oldu ve
+sabitlenen ArmoRM’nin 8192 context sınırını aştı. Referans da bu durumu hata
+olarak bırakıyor; kırpmıyor. Kullanıcı açıkça “Referans gibi taşan ArmoRM skorunu
+eksik bırak” seçeneğini seçti. V5’in `on_context_overflow: missing` politikası:
+
+- Tam cevabı ve maliyeti korur; GT ve BARTScore kendi tanımlarıyla çalışır.
+- Yalnız ölçülen ArmoRM context taşmasını eksik skor olarak kaydeder; token
+  uzunluğu/sınırı ve neden kaybolmaz. View’de değer NaN, sıfır değildir.
+- Aynı bilinen eksik skoru her resume’da yeniden denemez.
+- Eksik üretim, GPU/model yükleme hatası ve başka scorer hataları hâlâ başarısızdır.
+  `allow_partial: false` korunur; genel hata affı açılmaz.
+- Release manifesti `allowed_missing_scores` ile kanal başına bu eksikleri sayar.
+  Analizlerde ArmoRM kapsama oranı ayrıca raporlanmalı; eksiklerin uzun cevaplarda
+  yoğunlaşması nedeniyle ArmoRM ortalaması tüm örneklerin ortalaması değildir.
+
+**110 CPU testi geçti** (75.95 s); uçtan uca test-double koleksiyonunda 30 soru,
+120 cevap ve doğrulanmış release üretildi. Testler, eksik ArmoRM ile tam GT/maliyet korunmasını; yalnız düşünceyi reward
+puanlayıcısına göndermemeyi; diğer hataların gizlenmemesini ve token ID ayrımını
+kontrol eder. Gerçek v5 GPU pilot sonucu henüz bekleniyor. V4 tek örnek Llama
+16k bütçe tanısı 965 token’da EOS verdi; tekli batch/çalışma koşulları değiştiği
+ve aynı seed tek başına birebir GPU determinism sağlamadığı için bu sonuç
+“bütçe artışı kesin çözdü” kanıtı veya seçilmiş replacement sample değildir.
+Tanı cevabı hiçbir benchmark paketine katılmadı.
+
+```bash
+# Yeni ve izole v5 checkout’ta, compute node build adımı:
+llmr build-queries configs/benchmarks/shared_v5_pilot.yaml
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_pilot.yaml ibrahimg 1
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v5_pilot.yaml qwen3-32b ibrahimg
+# Her modelde tam üretim + GT/BART tamamlanması, ArmoRM başarı/izinli eksik
+# ayrımı ve kesilme oranı kontrol edilir. Başarılı örnek seçilerek tekrar üretilmez.
+```
+
 ## shared_v4: referansın düşünmesiz Qwen ayarı ve daha uzun cevap bütçesi
 
 **21 Ekim 2026 — kullanıcı kararı.** Kullanıcı, referansın Qwen ayarını uygulamayı
