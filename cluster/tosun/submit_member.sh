@@ -1,6 +1,6 @@
 #!/bin/bash
 # Usage: bash cluster/tosun/submit_member.sh CONFIG MODEL MEMBER [NUM_SHARDS]
-# Dataset must already be frozen/shared. Submits generation (GPU), then the scoring channels in parallel
+# Dataset must already be frozen/shared. Submits generation (GPU), then the scoring channels sequentially
 # (ground truth on CPU; ArmoRM and, if configured, BARTScore on one GPU each), then packaging.
 # Never submits router training.
 # Smoke test first on new code or a new model:  llmr build-queries on a small config, NUM_SHARDS=1.
@@ -33,14 +33,16 @@ JOB=cluster/tosun/jobs/member.sbatch
 GEN=$(sbatch "${COMMON[@]}" --gres="$GEN_GRES" --mem=$((64 * GPUS))G --cpus-per-task=$((8 * GPUS)) \
       "$JOB" "$CFG" "$MODEL" "$MEMBER" "$NUM_SHARDS" generate)
 GEN="${GEN%%;*}"
-# Scoring channels are independent of each other: all start once generation finished.
+# The collector holds one shard writer lock, so serialize the scoring passes.
 SCORED=()
+PREVIOUS="$GEN"
 for CHANNEL in ${CHANNELS//,/ }; do
     GPU=()
     # ArmoRM keeps the whole 8B reward model on one GPU (~16 GB in bf16); BART-large needs ~2 GB.
     [ "$CHANNEL" = ground_truth ] || GPU=(--gres="$(llmr_gres 1)")
-    ID=$(sbatch "${COMMON[@]}" "${GPU[@]}" --dependency="afterok:$GEN" "$JOB" "$CFG" "$MODEL" "$MEMBER" "$NUM_SHARDS" "$CHANNEL")
+    ID=$(sbatch "${COMMON[@]}" "${GPU[@]}" --dependency="afterok:$PREVIOUS" "$JOB" "$CFG" "$MODEL" "$MEMBER" "$NUM_SHARDS" "$CHANNEL")
     SCORED+=("${ID%%;*}")
+    PREVIOUS="${ID%%;*}"
 done
 AFTER=$(IFS=:; echo "${SCORED[*]}")
 PACK=$(sbatch "${COMMON[@]}" --dependency="afterok:$AFTER" "$JOB" "$CFG" "$MODEL" "$MEMBER" "$NUM_SHARDS" package)

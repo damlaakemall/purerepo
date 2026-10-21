@@ -68,23 +68,23 @@ srun --partition=cuda --qos=cuda --gres=gpu:1 --mem=32G --time=01:00:00 --pty ba
 
 ## Independent shared-v1 member jobs
 
-For the next collection use `configs/benchmarks/shared_v3_pilot.yaml`, then
-`configs/benchmarks/shared_v3.yaml`. `collection_team` selects `team_v3.yaml`: four priced models per
+For the next collection use `configs/benchmarks/shared_v4_pilot.yaml`, then
+`configs/benchmarks/shared_v4.yaml`. V4 disables Qwen3-32B thinking and raises its and Mistral-Nemo’s output ceiling to 16384 (total context 32768); other models retain 8192/16384. The frozen v3 tariffs and member assignments are reused. Actual measured tokens determine cost. `collection_team` selects `team_v3.yaml`: four priced models per
 member, with each 12B+ model requesting one `rtx_pro_6000` 96GB GPU. Generation is BF16 locally;
 OpenRouter tariffs only simulate estimated API USD. Accept the Llama/Gemma licenses assigned to you.
-Real v3 memory/context/reasoning pilots are pending; see the [walkthrough](../../docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
-V1/v2 configs and their collection assignments remain unchanged.
+İbrahim G’s v3 pilots are checked; fresh v4 GPU pilots are pending; see the [walkthrough](../../docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
+V1/v2/v3 configs and their artifacts remain unchanged.
 
 We are three members with four models each; the assignment is in [`team_v3.yaml`](team_v3.yaml) and the team
 procedure (who builds the dataset, who assembles) in the [team workflow](../../docs/team/team_workflow.md#0-üç-kişiyiz-kim-ne-yapar).
 After the dataset is frozen and shared, each member submits all their models with
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v3_pilot.yaml <member> 1   # pilot first
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v3.yaml <member> 4      # full run
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v4_pilot.yaml <member> 1   # pilot first
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v4.yaml <member> 4      # full run
 ```
 
 which calls `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` once per model (use that directly to resubmit one model). It requests the model's `gpus` (one 96GB card for v3 models with 12B+ parameters), then runs
-GT (CPU), ArmoRM (1 GPU) and BARTScore (1 GPU, if configured) scoring in parallel and packages the shard; it never submits router training.
+GT (CPU), ArmoRM (1 GPU) and BARTScore (1 GPU, if configured) scoring sequentially (one shard writer lock) and packages the shard; it never submits router training.
 `LLMR_BATCH_SIZE` (default 256) is how many requests go to vLLM at once. The older `submit_pipeline.sh` continues
 to serve the original ours_v1/ours_dev configs. See [team workflow](../../docs/team/team_workflow.md).

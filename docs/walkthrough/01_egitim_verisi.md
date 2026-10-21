@@ -8,12 +8,73 @@
 > **Durum (15 Ekim 2026):** akış hazır ve 30 soruluk bir pilotla gerçek GPU'da uçtan uca doğrulandı. Tam
 > koleksiyon (7652 soru × 12 model × 10 cevap) henüz yapılmadı.
 
+## shared_v4: referansın düşünmesiz Qwen ayarı ve daha uzun cevap bütçesi
+
+**21 Ekim 2026 — kullanıcı kararı.** Kullanıcı, referansın Qwen ayarını uygulamayı
+ve cevap bütçesi yetmediğinde daha uzun üretim beklemeyi istedi. Bu, kesilmeleri
+kabul ederek v3’e devam etme kararı değildir. V3 pilotu ve yapılandırmaları korunur;
+yeni sürüm `configs/benchmarks/shared_v4.yaml`, pilotu `shared_v4_pilot.yaml`, havuzu
+`configs/model_pools/team_v4.yaml` dosyalarındadır. Üye atamaları aynı
+`cluster/tosun/team_v3.yaml` dosyasından okunur.
+
+| değişiklik | v3 | v4 | gerekçe |
+|---|---|---|---|
+| Qwen3-32B thinking | açık | kapalı | sabitlenen referans `e6578414` Qwen politikasını izlemek |
+| Qwen3-32B çıktı / toplam context | 8192 / 16384 | 16384 / 32768 | önceki pilotta düşünme sırasında 5 kesilme; cevaba daha çok yer |
+| Mistral-Nemo çıktı / toplam context | 8192 / 16384 | 16384 / 32768 | önceki pilotta 1 kesilme |
+| diğer modellerin bütçesi | 8192 / 16384 | aynı | bu adımda değişiklik gerekmiyor |
+
+Bu sayılar token tavanlarıdır. **Maliyet = gerçek prompt token’ı × dondurulmuş
+input tarifesi + gerçek üretilen token × dondurulmuş output tarifesi** (tarifeler
+milyon token başına olduğundan toplam 1e6’ya bölünür). Örneğin tavan 16384 iken
+model 900 token’da EOS verirse 900 output token fiyatlanır. Boş düşünce etiketi
+gibi gerçekten üretilen token’lar da bu sayımın içindedir. 2026-10-19 fiyatları,
+model kimlik/revision’ları, kaynaklar, bölmeler, seed, T=0.7, top_p=1.0 ve üç ayrı
+kalite kanalı aynıdır; fiyatlar tekrar çekilmedi. Bu yine yerel üretime uygulanmış
+**estimated API USD** hesabıdır, Tosun GPU faturası değildir. Modeller arasında
+çıktı tavanı farklıdır; karşılaştırmada v4’ün bu farkı açıkça raporlanmalıdır.
+
+Referans yerel HF provider’ının varsayılanı 4096’dır; **16384 bu varsayılanın kopyası
+değil, kullanıcının daha uzun cevap isteğiyle alınan v4 kararıdır.** Referans
+aynı zamanda kapanmamış düşünceyi sıfır GT olarak değerlendirir. V4 bunun yerine
+başarısız cevapları veri dışına atmaz ve başarılı örneği daha iyi cevap gelene
+kadar tekrar üretmez; yeni pilotun kesilme sayısını ayrıca kontrol eder.
+
+Tosun’da ayrı checkout `~/purerepo-v4-nonthinking` kullanılır. V3’te doğrulanan native
+Mistral tokenizer adaptörü ve shard kilidine uygun sıralı GT → ArmoRM → BARTScore
+akışı bu checkout’a alınır; önceki katkıların source hash’i değiştirilmez.
+Yerelde bütün testler **99 passed** (16.32 s), Tosun build işinde de **99 passed**
+(124.24 s). Build işi `4111079`, ardından pilot gönderimi `4111080` olarak kuyruğa
+alındı. `4111176`, dört paket tamamlanınca doğrulama işini planlar. Bu iş
+`logs/v4-pilot-report.json` dosyasına model başına bitiş nedeni, token kullanımı ve
+gerçek token’lardan hesaplanan estimated API USD özetini yazar. Bütün paketler
+bütünse, cevaplar doğal EOS ile bitmişse ve düşünce temizliği sonrası boş cevap
+yoksa tam v4 soru setini compute node’da build edip yalnız İbrahim G’nin dört
+modelini 4 shard ile gönderir. Devam eden kesilmede tam toplamayı başlatmaz;
+tekrarlı çıktı ile anlamlı devam ayrıştırılarak yeni bütçe/sürüm değerlendirilir.
+Gerçek v4 GPU pilot sonucu henüz bekleniyor; v3 sayıları v4 sonucu olarak kullanılamaz.
+
+```bash
+export LLMR_REPO="$HOME/purerepo-v4-nonthinking"
+export PYTHONPATH="$LLMR_REPO"
+cd "$LLMR_REPO"
+source cluster/tosun/config.sh
+llmr_activate
+# Compute node üzerindeki build job’unda:
+llmr build-queries configs/benchmarks/shared_v4_pilot.yaml
+# Build başarılı olduktan sonra:
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v4_pilot.yaml ibrahimg 1
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v4_pilot.yaml qwen3-32b ibrahimg
+# Aynı kontrol diğer üç model için de yapılır; sonuç görülmeden tam toplama başlatılmaz.
+```
+
 ## shared_v3: fiyatı doğrulanabilen model havuzu
 
 **19 Ekim 2026 — yeni koleksiyonun hazırlığı.** Kullanıcının fiyatı bulunabilen
 modellerle çalışma isteğiyle ana sonraki sürüm v3 oldu. V1/v2 dosyaları ve sonuçları
 değiştirilmedi. Bu bölüm aşağıdaki tarihsel v1/v2 kayıtlarından önce okunmalı;
-v3 gerçek GPU pilotu ve tam koleksiyonu henüz yapılmadı.
+21 Ekim 2026 itibarıyla İbrahim G’nin dört modeli için gerçek GPU pilotu tamamlandı;
+tam koleksiyon henüz başlatılmadı. Aşağıdaki pilot sonuçları, 12 modelin tamamı için doğrulama değildir.
 
 ### Neyi değiştirdik, neden?
 
@@ -146,10 +207,69 @@ llmr evaluate-data configs/benchmarks/shared_v3.yaml
 bash cluster/tosun/submit_train.sh configs/experiments/quality_regression__shared_v3.yaml 3
 ```
 
-**Bunlar v3 için henüz Tosun'da çalıştırılmadı.** Pilot özellikle Qwen3-32B düşünme
+**Tam toplama ve router eğitimi henüz çalıştırılmadı.** Pilot özellikle Qwen3-32B düşünme
 kesilmesi, Multi-News/Phi-4 context sınırı, Gemma text template'i, EOS, tokenizer
 usage ve 12B+ bellek kullanımını denetler. Test split'i router ayarı seçmek için kullanılmaz.
 CPU kontrolleri ve gerçek sayıları [adım 2](02_router_egitimi.md#v3-fiyatlı-havuzun-cpu-kontrolü) kaydeder.
+
+### İbrahim G’nin gerçek v3 pilotu — 21 Ekim 2026
+
+Damla’nın `64462f5` commit’i, Tosun’da mevcut değiştirilmiş `~/purerepo` korunarak
+`~/purerepo-v3-64462f5` klasöründe çalıştırıldı. `LLMR_REPO` ve `PYTHONPATH` bu
+klasöre ayarlandı; mevcut Python ortamı kullanıldı. Compute node üzerinde **98 test
+geçti**, ardından `shared_v3_pilot` için **30 soru** donduruldu (build işi `4093298`).
+Her modele aynı sorular için k=2 ile 60 cevap üretildi; tam toplamadaki k=10 değişmedi.
+
+| model | başarılı cevap | EOS / token sınırı | en uzun çıktı | GT / ArmoRM / BARTScore |
+|---|---:|---:|---:|---:|
+| Qwen3-32B | 60 | 55 / 5 | 8192 | 60 / 60 / 60 |
+| Qwen3-14B | 60 | 60 / 0 | 3844 | 60 / 60 / 60 |
+| Mistral-Nemo-12B | 60 | 59 / 1 | 8192 | 60 / 60 / 60 |
+| Llama-3.2-3B | 60 | 60 / 0 | 1992 | 60 / 60 / 60 |
+
+Burada “başarılı cevap” üretim işleminin tamamlanmasıdır; doğru cevap veya kesilmemiş
+cevap demek değildir. **Qwen3-32B’nin 8 OlympiadBench cevabından 5’i** düşünme
+sırasında 8192 token sınırına ulaştı; kapanmayan düşünce bloğu mevcut `strip_think`
+kuralıyla boş cevaba dönüştü. Bu gözlem nedeniyle tam toplama başlatılmadı.
+8192 sınırı altında bu kesilmelerin kabul edilip edilmeyeceği kullanıcıyla
+netleştirilmeli; token bütçesi veya model davranışı sessizce değiştirilmemeli.
+
+Dört paketin manifest dosyaları ve bütün dosya hash’leri doğrulandı; her pakette
+60 başarılı üretim anahtarıyla eşleşen, kanal başına 60 başarılı skor var, işlem
+hatası yok. Prompt/çıktı token sayıları negatif olmayan tamsayılar ve seed uygulaması
+kontrol edildi. Prompt token aralıkları sırasıyla 15–2247, 19–2251, 10–2518 ve
+42–2229. Paketler `~/llmr_data/benchmarks/shared_v3_pilot/exports/` altında,
+`ibrahimg-<model>-00000-of-00001` adlarıyla duruyor. Bu dört paket ortak 12 modellik
+release olarak assemble edilmedi; diğer üyelerin işleri başlatılmadı.
+
+**Uygulama düzeltmeleri.** Collector her shard için tek `.writer.lock` tuttuğundan
+paralel scorer işleri çakıştı. Skorları yeniden üretmek yerine eksik BARTScore
+adımları yeniden gönderildi; yeni zincirlerde GT → ArmoRM → BARTScore sırası
+kullanıldı. Submit script’i de aynı sırayı uygular; kalite kanalları bağımsız kalır.
+Llama lisans onayı gelince generation `4094814`, skorlar `4094815–4094817`, paket
+`4094818` olarak tamamlandı.
+
+vLLM’nin native `MistralTokenizer` nesnesi HF’nin `name_or_path`, `init_kwargs` ve
+Jinja `chat_template` alanlarını sağlamadığı için küçük bir backend adaptörü gerekti.
+Native `apply_chat_template(tokenize=True)` token ID’leri doğrudan kullanılır;
+control token’lar metne çevrilip yeniden encode edilmez. Native template sınıfı/sürümü
+ve istenen pinned tokenizer revision metadata’ya yazılır. Adaptör
+`~/purerepo-v3-nemo-compat` içinde izole edildi; önceki modellerin source hash’i
+değiştirilmedi. **10 backend testi** ve gerçek pinned tokenizer ile ID eşitliği
+kontrolü geçti (`4094888`); Mistral üretimi `4094920`, skorları `4094921–4094923`,
+paketi `4094924` olarak tamamlandı. Başarısız denemeler ayrı arşivde saklandı ve paketlere katılmadı. Bu adaptör ve test sürümün kod değişikliklerine dahildir.
+
+Kontrol komutları (her model için; ilgili checkout etkinleştirilerek):
+
+```bash
+export LLMR_REPO="$HOME/purerepo-v3-64462f5"
+export PYTHONPATH="$LLMR_REPO"
+cd "$LLMR_REPO"
+source cluster/tosun/config.sh
+llmr_activate
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v3_pilot.yaml qwen3-32b ibrahimg --show-failed 0
+# Diğer modeller için aynı komutta model adını değiştirin.
+```
 
 ## Büyük resim
 

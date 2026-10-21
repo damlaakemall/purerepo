@@ -96,7 +96,7 @@ bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v1.yaml ibrahim
 
 Tek bir modeli yeniden göndermek için: `bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v1.yaml smollm3-3b ibrahimb 4`.
 Wrapper modelin `gpus` değerine göre GPU ister (24B, 27B ve 32B için 2; Llama ve Gemma için önce HF'de lisansı kabul edin), generation'dan
-sonra CPU ground-truth ve GPU ArmoRM skorlamasını paralel, ardından paketlemeyi submit
+sonra CPU ground-truth ve GPU scorer kanallarını shard yazıcı kilidi nedeniyle sırayla, ardından paketlemeyi submit
 eder; router training submit etmez. `LLMR_BATCH_SIZE` vLLM'e tek seferde giden istek
 sayısıdır (varsayılan 256). Elle çalıştırmak isterseniz her shard için aynı dört argüman:
 
