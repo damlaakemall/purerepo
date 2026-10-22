@@ -470,3 +470,54 @@ def test_final_only_never_rates_raw_reasoning_as_an_answer(cfg):
     assert np.isfinite(gt.costs).all()
     manifest = validate_release(frozen_dir(cfg))
     assert manifest["allowed_missing_scores"] == {"ground_truth": 0, "armorm": 10, "bartscore": 10}
+
+
+def test_math_timeout_requires_opt_in_and_survives_assembly(cfg, monkeypatch):
+    from llm_routing.ground_truth import MathTimeout
+    cfg['scoring']['ground_truth'].update(math_timeout=600, on_math_timeout='missing')
+    generate(cfg, 'tiny', backend=fake, retry_delay=0)
+    calls = []
+    def expired(*args, **kwargs):
+        calls.append(1)
+        raise MathTimeout(600)
+    monkeypatch.setattr('llm_routing.ground_truth.score_query', expired)
+    path = score(cfg, 'tiny')
+    score(cfg, 'tiny')
+    assert len(calls) == 10
+    assert all(r['score'] is None and r['details'] == {'reason': 'math_timeout', 'seconds': 600}
+               for r in read_jsonl(path / 'ground_truth.jsonl'))
+    score(cfg, 'tiny', scorer='armorm', evaluator=lambda q, r: (0.5, {}))
+    package(cfg, 'tiny')
+    bench = assemble(cfg)
+    assert np.isnan(bench.scores).all() and np.isfinite(bench.costs).all()
+    assert validate_release(frozen_dir(cfg))['allowed_missing_scores']['ground_truth'] == 10
+
+
+def test_math_deadline_not_permitted_by_legacy_config(cfg, monkeypatch):
+    from llm_routing.ground_truth import MathTimeout
+    generate(cfg, 'tiny', backend=fake, retry_delay=0)
+    def expired(*args, **kwargs):
+        raise MathTimeout(600)
+    monkeypatch.setattr('llm_routing.ground_truth.score_query', expired)
+    with pytest.raises(RuntimeError, match='scoring failures'):
+        score(cfg, 'tiny')
+
+
+def test_rescoring_import_preserves_answers_and_original_environment(cfg):
+    from cluster.tosun.rescore_v5_gt2 import prepare
+    from llm_routing.collection.io import file_hash
+    path = generate(cfg, 'tiny', backend=fake, retry_delay=0)
+    score(cfg, 'tiny')
+    original_hash = file_hash(path / 'responses.jsonl')
+    original_run = json.loads((path / 'run.json').read_text())
+    revised = copy.deepcopy(cfg)
+    revised.update(name='scoring_revision', version='gt2', path=str(Path(cfg['path']).parent / 'gt2'))
+    revised['scoring']['ground_truth'].update(math_timeout=600, on_math_timeout='missing')
+    destination = prepare(cfg, revised, 'tiny', 'local', 0, 1)
+    assert file_hash(destination / 'responses.jsonl') == original_hash
+    assert file_hash(path / 'responses.jsonl') == original_hash
+    assert json.loads((destination / 'run.json').read_text())['generation_origin']['run'] == original_run
+    assert not (destination / 'ground_truth.jsonl').exists()
+    score(revised, 'tiny')
+    with pytest.raises(ValueError, match='already exists'):
+        prepare(cfg, revised, 'tiny', 'local', 0, 1)

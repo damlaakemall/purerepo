@@ -218,6 +218,7 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
     if scorer == "armorm" and options.get("on_context_overflow", "error") not in ("error", "missing"):
         raise ValueError("on_context_overflow must be error or missing")
     evaluator_id = digest(evaluator_spec)
+    from ..ground_truth import MathTimeout
     scoring_environment = environment()
     with locked(path / ".writer.lock"):
         init_job(path, spec)
@@ -265,7 +266,8 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
                                "strict_correct": False, "predicted": ""}
                 else:
                     from ..ground_truth import score_query
-                    ev = score_query(query, text, mbpp_timeout=int(options.get("mbpp_timeout", 5)))
+                    ev = score_query(query, text, mbpp_timeout=int(options.get("mbpp_timeout", 5)),
+                                     math_timeout=options.get("math_timeout"))
                     value = float(ev.score)
                     details = {"answer_type": query["answer_type"], "mode": ev.mode,
                                "strict_correct": ev.strict_correct, "predicted": ev.predicted}
@@ -274,6 +276,11 @@ def score(cfg, model, scorer="ground_truth", member="local", shard_index=0, num_
                 if not math.isfinite(value):
                     raise ValueError("nonfinite quality score")
                 record.update(score=value, details=details, success=True, error=None)
+            except MathTimeout as e:
+                record.update(score=None, details={"reason": "math_timeout", "seconds": e.seconds},
+                              success=False, error=f"{type(e).__name__}: {e}")
+                if not allowed_missing_score(cfg, scorer, record):
+                    errors += 1
             except NoFinalAnswer as e:
                 record.update(score=None, details={"reason": "no_final_answer"},
                               success=False, error=f"{type(e).__name__}: {e}")

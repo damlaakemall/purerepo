@@ -8,6 +8,63 @@
 > **Durum (15 Ekim 2026):** akış hazır ve 30 soruluk bir pilotla gerçek GPU'da uçtan uca doğrulandı. Tam
 > koleksiyon (7652 soru × 12 model × 10 cevap) henüz yapılmadı.
 
+## shared_v5_gt2: kesinleşen matematik süre sınırı — 22 Ekim 2026
+
+Bütün 12 model için **OlympiadBench cevap kontrolü başına 600 saniye** duvar
+saati sınırı kararlaştırıldı. Daha erken biten karşılaştırma aynı skoru alır;
+süreyi aşan karşılaştırma `score=null`, `reason=math_timeout`, `seconds=600`
+olarak kaydedilir. Kontrolün bitmemesi cevabın yanlış olduğunu kanıtlamaz;
+GT’ye sıfır yazılmaz ve başka kalite kanalından doldurulmaz. MBPP’nin mevcut
+5 saniyelik kod testi sınırı ve süre aşımını yanlış cevap sayması değişmedi.
+ArmoRM’nin 8192 context sınırı/eksik skoru ve toplam token maliyeti de değişmedi.
+
+Karar anındaki gerçek v5 durumu: dört modelin toplam **306080 cevabı** üretildi.
+Üç modelin dörder paketinde dosya hash’leri, anahtarlar, token/context bütçeleri
+ve kanallar bağımsız doğrulandı:
+
+| model | cevap | stop / length | GT / ArmoRM / BART | izinli ArmoRM eksik |
+|---|---:|---:|---:|---:|
+| Qwen3-32B | 76520 | 76464 / 56 | 76520 / 76454 / 76520 | 66 |
+| Qwen3-14B | 76520 | 76446 / 74 | 76520 / 76422 / 76520 | 98 |
+| Mistral-Nemo-12B | 76520 | 76367 / 153 | 76520 / 76362 / 76520 | 158 |
+
+Bunlar **eski v5** sayılarıdır; yeni GT2 sonuçları olarak sunulmaz. Llama’nın
+GT shard 0’ında 19390 cevaptan 18256 kayıt yazıldıktan sonra ilerleme durdu;
+1134 kayıt kaldı. Takılan `4121908_0` (somut job `4121990`) durduruldu;
+üretilmiş cevaplar ve önceki skorlar silinmedi. Diğer Llama puanlama aşamaları
+bu işin başarısına bağımlı olduğundan tamamlanmış sayılmaz.
+
+Bu kararın nedeni Llama’nın `olympiadbench/673dbb00cc49c41098c5c9e9`, sample 6
+cevabındaki binlerce tekrarın SymPy sayısal karşılaştırmasını 20 saatten uzun
+kilitlemesidir. Üretim bitmişti; takılan model değil puanlayıcıydı. Hesaplamayı
+ayrı süreçte yürütmek, referans kodun geniş `except` bloklarının süre sınırını
+yutmasını önler. Süre sonunda alt süreç sonlandırılır ve temizlenir.
+
+Eski `shared_v5` configleri ve sonuçları donmuş kalır. Yeni configler
+`shared_v5_gt2.yaml` / `shared_v5_gt2_pilot.yaml` ayrı veri kökleri kullanır.
+GT bütün modeller için yeniden hesaplanır; yalnız takılan Llama örneğine özel
+kural uygulanmaz. Aynı donmuş cevaplar, sorular, splitler, modeller, üretim
+ayarları ve fiyatlar kullanılır; yeniden cevap üretilmez. Aktarım özgün
+`run.json` ortamını ve cevap dosyasının hash’ini `generation_origin` içinde
+saklar. Kaynak Python veya kaynak skor dosyaları değiştirilmez.
+
+Yeni kod ayrı Tosun checkout’unda kurulunca, compute node’da örnek aktarım:
+
+```bash
+# Önce kaynak shard'ın çalışan yazarı olmadığını doğrula; kilidi körlemesine silme.
+python cluster/tosun/rescore_v5_gt2.py llama-3.2-3b ibrahimg --num-shards 4 --shard-index 0
+llmr score configs/benchmarks/shared_v5_gt2.yaml --model llama-3.2-3b --member ibrahimg --num-shards 4 --shard-index 0 --scorer ground_truth
+```
+
+Aktarım aynı soruları/splitleri ve aynı generation spec’ini denetler, tam ve
+benzersiz başarılı cevapları hash’leriyle kontrol eder, GT’yi kopyalamaz.
+Değişmeyen ArmoRM/BARTScore kayıtları varsa korunup kaldığı yerden sürdürülür.
+İş gönderimi yalnız üyeye atanmış dört model içindir; diğer üyeler aynı kararı
+kendi modellerine uygular. Sırf tekrar için `submit_my_models.sh` çalıştırılmaz.
+Bu bölüm karar ve uygulanabilir prosedürdür; GT2 tam sonuçlarının tamamlandığı
+anlamına gelmez. Son doğrulamada `allowed_missing_scores.ground_truth` ve kanal
+kapsaması ayrıca raporlanacaktır.
+
 ## shared_v5: bütün havuza uygulanan bütçe ve nihai cevap politikası
 
 **21 Ekim 2026 — kullanıcının netleştirdiği ortak karar.** Uzun cevap ve thinking

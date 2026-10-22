@@ -22,6 +22,12 @@ place where we deviate ([CONTRIBUTING.md → Keep it simple](CONTRIBUTING.md#kee
 
 ## Where we are now
 
+Settled scoring revision: [`shared_v5_gt2`](configs/benchmarks/shared_v5_gt2.yaml)
+adds a 600-second OlympiadBench check deadline for all 12 models. Timed-out GT
+remains missing; frozen v5 answers are reused without regeneration.
+See [the decision and migration procedure](docs/walkthrough/01_egitim_verisi.md#shared_v5_gt2-kesinleşen-matematik-süre-sınırı--22-ekim-2026).
+
+
 The next collection is **`shared_v5`** (İbrahim G’s pilots validated; his four-model full collection running; v3/v4 stay frozen): 12 local open models with publicly verifiable, frozen
 OpenRouter provider tariffs. Six v2 models are retained and six are replaced. Costs are **estimated
 API USD**, computed from local input/output token counts, not a Tosun bill. Generation stays on Tosun,

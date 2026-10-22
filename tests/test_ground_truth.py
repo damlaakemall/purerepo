@@ -89,3 +89,18 @@ def test_legacy_scorers_use_the_hardened_evaluators():
     from llm_routing.legacy_pipeline.scorers import get_scorer
     assert get_scorer("multiple_choice")(["A cache is a store."], ["A"]).tolist() == [0.0]
     assert get_scorer("exact_match_number")(["### Final Answer:\n**1,128**"], ["x #### 1128"]).tolist() == [1.0]
+
+
+def test_math_deadline_is_missing_evidence_not_wrong_answer():
+    import multiprocessing
+    from llm_routing.ground_truth import MathTimeout
+    row = {**F.olympiadbench({'question': 'Find x', 'final_answer': ['2']}), 'source': 'olympiadbench'}
+    before = {p.pid for p in multiprocessing.active_children()}
+    with pytest.raises(MathTimeout):
+        score_query(row, r'\boxed{2}', math_timeout=0.001)
+    assert {p.pid for p in multiprocessing.active_children()} == before
+    # A completed check keeps the original judge result.
+    assert score_query(row, r'\boxed{2}', math_timeout=30).score == 1
+    # The deadline is not applied to non-math sources.
+    numeric = {**F.gsm8k({'question': 'Q', 'answer': '#### 2'}), 'source': 'gsm8k'}
+    assert score_query(numeric, 'Answer: 2', math_timeout=0.001).score == 1

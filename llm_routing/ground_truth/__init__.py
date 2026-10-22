@@ -14,23 +14,73 @@ The OlympiadBench judge is vendored from OpenBMB under the bundled ``OLYMPIADBEN
 
 from __future__ import annotations
 
+import math
+import multiprocessing
+
 from .evaluators import Evaluation, evaluate, supported_answer_types
 
-# Older configs named the scorer instead of the answer type.
 LEGACY_SCORERS = {"exact_match_number": "numeric", "multiple_choice": "mcq_letter"}
 
 
-def score_query(query: dict, response: str, mbpp_timeout: int = 5) -> Evaluation:
-    """Score one response against a frozen query row (``answer_type``, ``gold``, ``aux``, ``gt_dataset``)."""
-    aux = dict(query.get("aux") or {})
-    aux["_prompt"] = query["query"]  # BBH's fallback reads the options from the prompt
+class MathTimeout(TimeoutError):
+    """The math judge did not finish; this does not establish an incorrect answer."""
+    def __init__(self, seconds):
+        self.seconds = seconds
+        super().__init__(f"math evaluation exceeded {seconds}s")
+
+
+def _math_worker(connection, args, kwargs):
+    # Process isolation also bounds code inside upstream bare except blocks.
     try:
-        return evaluate(query.get("gt_dataset") or query.get("source", ""), response, query["gold"],
-                        answer_type=query["answer_type"], aux=aux, mbpp_timeout=mbpp_timeout)
+        connection.send((True, evaluate(*args, **kwargs)))
+    except Exception as error:
+        connection.send((False, error))
+    finally:
+        connection.close()
+
+
+def _bounded_math(args, kwargs, seconds):
+    context = multiprocessing.get_context("spawn")
+    reader, writer = context.Pipe(duplex=False)
+    process = context.Process(target=_math_worker, args=(writer, args, kwargs))
+    process.start()
+    writer.close()
+    try:
+        if not reader.poll(seconds):
+            raise MathTimeout(seconds)
+        ok, result = reader.recv()
+        if not ok:
+            raise result
+        return result
+    finally:
+        reader.close()
+        process.join(timeout=0.1)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=1)
+        if process.is_alive():
+            process.kill()
+            process.join()
+        process.close()
+
+
+def score_query(query: dict, response: str, mbpp_timeout: int = 5,
+                math_timeout: float | None = None) -> Evaluation:
+    """Optional math deadline is opt-in; existing benchmark scoring stays unchanged."""
+    if math_timeout is not None and (not math.isfinite(math_timeout) or math_timeout <= 0):
+        raise ValueError("math_timeout must be finite and positive")
+    aux = dict(query.get("aux") or {})
+    aux["_prompt"] = query["query"]
+    dataset = query.get("gt_dataset") or query.get("source", "")
+    args = (dataset, response, query["gold"])
+    kwargs = dict(answer_type=query["answer_type"], aux=aux, mbpp_timeout=mbpp_timeout)
+    if math_timeout is not None and dataset == "olympiadbench":
+        return _bounded_math(args, kwargs, math_timeout)
+    try:
+        return evaluate(*args, **kwargs)
     except TimeoutError:
-        # Code that does not finish within the limit fails the tests (an infinite loop is a wrong
-        # answer, not a scoring error). The mode records it so a too-tight limit is visible.
+        # MBPP has its existing, separate execution limit: failing tests is GT=0.
         return Evaluation(score=0.0, mode="timeout", strict_correct=False, predicted="timeout")
 
 
-__all__ = ["Evaluation", "evaluate", "score_query", "supported_answer_types", "LEGACY_SCORERS"]
+__all__ = ["Evaluation", "MathTimeout", "evaluate", "score_query", "supported_answer_types", "LEGACY_SCORERS"]

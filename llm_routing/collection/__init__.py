@@ -34,9 +34,17 @@ class NoFinalAnswer(ValueError):
 
 
 def allowed_missing_score(cfg, channel, record):
-    """Only opted-in context overflows or absent final answers may remain missing."""
+    """Only explicitly opted-in, measured boundary failures may remain missing."""
     details = record.get("details", {})
     tokens, limit = details.get("tokens"), details.get("limit")
+    gt = cfg.get("scoring", {}).get("ground_truth", {})
+    seconds = details.get("seconds")
+    if (channel == "ground_truth" and gt.get("on_math_timeout") == "missing"
+            and record.get("success") is False and record.get("score") is None
+            and details.get("reason") == "math_timeout"
+            and type(seconds) in (int, float) and seconds > 0
+            and seconds == gt.get("math_timeout")):
+        return True
     if (channel in ("armorm", "bartscore")
             and cfg.get("scoring", {}).get(channel, {}).get("text_policy") == "final_only"
             and record.get("success") is False and record.get("score") is None
