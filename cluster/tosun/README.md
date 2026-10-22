@@ -88,3 +88,13 @@ which calls `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` once per model (us
 GT (CPU), ArmoRM (1 GPU) and BARTScore (1 GPU, if configured) scoring sequentially (one shard writer lock) and packages the shard; it never submits router training.
 `LLMR_BATCH_SIZE` (default 256) is how many requests go to vLLM at once. The older `submit_pipeline.sh` continues
 to serve the original ours_v1/ours_dev configs. See [team workflow](../../docs/team/team_workflow.md).
+
+### Settled GT scoring revision (22 October 2026)
+
+`shared_v5_gt2` reuses frozen v5 generation and applies a 600-second
+OlympiadBench evaluation deadline to every model; expiry leaves GT missing,
+never zero. Do not modify the running v5 checkout or regenerate answers. Use
+an isolated checkout and `rescore_v5_gt2.py` for a checked copy into the new
+path, then submit only scoring/package stages for your own models. Recompute
+GT even for models whose v5 bundles are complete. See the
+[walkthrough](../../docs/walkthrough/01_egitim_verisi.md) for provenance and commands.
