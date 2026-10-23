@@ -43,7 +43,7 @@ stay intact. See [the pool, prices and procedure](docs/walkthrough/01_egitim_ver
 
 | | status |
 |---|---|
-| Shared collection protocol | İbrahim G’s four-model GT2 contribution validated: 306080 responses in 16 bundles; the other eight models are still pending |
+| Shared collection protocol | GT2 contribution validated (306080 responses, 16 bundles); fresh four-model v6 pilots submitted, full generation gated on validation |
 | Routers | one baseline: *quality regression* (from RouterBench) |
 | Planned paper routers | Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT |
 | Open decisions | mixed quality scales, shared accounts, GPU pilots, Hybrid pair and UniRoute pool split ([DECISIONS.md](DECISIONS.md)) |
@@ -95,9 +95,9 @@ Do the one-time setup in [cluster/tosun/README.md](cluster/tosun/README.md), the
 30-query v5 pilot:
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_gt2_pilot.yaml <member> 1        # pilot, your 4 models
-python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v5_gt2_pilot.yaml <model> <member>   # check each one
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_gt2.yaml <member> 4           # full run
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v6_pilot.yaml <member> 1        # pilot, your 4 models
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v6_pilot.yaml <model> <member>   # check each one
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v6.yaml <member> 4           # full run
 ```
 
 Router training on Tosun uses `bash cluster/tosun/submit_train.sh <experiment.yaml> <num_seeds>`. The only

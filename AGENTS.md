@@ -46,9 +46,9 @@ CI (`.github/workflows/`) runs the tests, both CPU training smokes, the router c
 the collection smoke. Real generation and scoring only run on Tosun GPUs:
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_pilot.yaml <member> 1    # 30-query pilot of a member's 4 models
-bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v5_pilot.yaml <model> <member> 1   # or one model
-python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v5_pilot.yaml <model> <member>    # check it before packaging
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v6_pilot.yaml <member> 1    # 30-query pilot of a member's 4 models
+bash cluster/tosun/submit_member.sh configs/benchmarks/shared_v6_pilot.yaml <model> <member> 1   # or one model
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v6_pilot.yaml <model> <member>    # check it before packaging
 ```
 
 Setup, GPUs and known Tosun problems: [cluster/tosun/README.md](cluster/tosun/README.md) and [docs/walkthrough/01_egitim_verisi.md](docs/walkthrough/01_egitim_verisi.md).

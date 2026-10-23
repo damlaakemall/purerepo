@@ -68,9 +68,9 @@ srun --partition=cuda --qos=cuda --gres=gpu:1 --mem=32G --time=01:00:00 --pty ba
 
 ## Independent shared-v1 member jobs
 
-For new collections use `configs/benchmarks/shared_v5_gt2_pilot.yaml`, then
-`configs/benchmarks/shared_v5_gt2.yaml`. Previously generated v5 answers must be imported
-with `rescore_v5_gt2.py` instead of regenerated. V5 uses non-thinking Qwen3 and 16384 output / 32768 total context across the pool, except Phi-4 (12288 / 16384); actual prompt room further limits output. Known ArmoRM context overflows and absent final-answer reward scores may remain missing; GT2 also permits the configured 600-second math timeout as missing GT. The frozen v3 tariffs and member assignments are reused. Actual measured tokens determine cost. `collection_team` selects `team_v3.yaml`: four priced models per
+For new collections use `configs/benchmarks/shared_v6_pilot.yaml`, then
+`configs/benchmarks/shared_v6.yaml`. Existing GT2 contributions stay frozen. V6 changes generation, so use a fresh
+pilot and fresh v6 answers; rescore_v5_gt2.py is only for the earlier scoring revision. V5 uses non-thinking Qwen3 and 16384 output / 32768 total context across the pool, except Phi-4 (12288 / 16384); actual prompt room further limits output. Known ArmoRM context overflows and absent final-answer reward scores may remain missing; GT2 also permits the configured 600-second math timeout as missing GT. The frozen v3 tariffs and member assignments are reused. Actual measured tokens determine cost. `collection_team` selects `team_v3.yaml`: four priced models per
 member, with each 12B+ model requesting one `rtx_pro_6000` 96GB GPU. Generation is BF16 locally;
 OpenRouter tariffs only simulate estimated API USD. Accept the Llama/Gemma licenses assigned to you.
 İbrahim G’s four v5 pilots are validated (240 responses, two declared ArmoRM overflows); his four-model GT2 contribution is complete (306080 responses, 16 validated bundles), while the other members’ pilots remain pending; see the [walkthrough](../../docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
@@ -81,8 +81,8 @@ procedure (who builds the dataset, who assembles) in the [team workflow](../../d
 After the dataset is frozen and shared, each member submits all their models with
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_gt2_pilot.yaml <member> 1   # pilot first
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_gt2.yaml <member> 4      # full run
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v6_pilot.yaml <member> 1   # pilot first
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v6.yaml <member> 4      # full run
 ```
 
 which calls `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` once per model (use that directly to resubmit one model). It requests the model's `gpus` (one 96GB card for v3 models with 12B+ parameters), then runs
