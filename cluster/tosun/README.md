@@ -68,21 +68,32 @@ srun --partition=cuda --qos=cuda --gres=gpu:1 --mem=32G --time=01:00:00 --pty ba
 
 ## Independent shared-v1 member jobs
 
-For new collections use `configs/benchmarks/shared_v5_gt2_pilot.yaml`, then
-`configs/benchmarks/shared_v5_gt2.yaml`. Previously generated v5 answers must be imported
-with `rescore_v5_gt2.py` instead of regenerated. V5 uses non-thinking Qwen3 and 16384 output / 32768 total context across the pool, except Phi-4 (12288 / 16384); actual prompt room further limits output. Known ArmoRM context overflows and absent final-answer reward scores may remain missing; GT2 also permits the configured 600-second math timeout as missing GT. The frozen v3 tariffs and member assignments are reused. Actual measured tokens determine cost. `collection_team` selects `team_v3.yaml`: four priced models per
-member, with each 12B+ model requesting one `rtx_pro_6000` 96GB GPU. Generation is BF16 locally;
-OpenRouter tariffs only simulate estimated API USD. Accept the Llama/Gemma licenses assigned to you.
-İbrahim G’s four v5 pilots are validated (240 responses, two declared ArmoRM overflows); his four-model GT2 contribution is complete (306080 responses, 16 validated bundles), while the other members’ pilots remain pending; see the [walkthrough](../../docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
-V1/v2/v3 configs and their artifacts remain unchanged.
+For new collections use `configs/benchmarks/shared_v6_pilot.yaml`, then
+`configs/benchmarks/shared_v6.yaml`. V6 uses non-thinking Qwen3, an 8192-token
+producer ceiling and a separate ArmoRM limit of 8192 tokens for the full
+question/answer chat. A synchronous engine stop reserves 1024 reward tokens
+for cross-tokenizer expansion; actual prompt room also respects each producer's
+context (32768 total, Phi-4: 16384). ArmoRM context overflow is fatal in v6.
+Known absent-final reward records and the configured 600-second math deadline
+retain their explicit missing-score policies. The frozen v3 tariffs and member
+assignments are reused; costs use actual generated tokens, never the ceiling.
+`collection_team` selects `team_v3.yaml`; each member runs only their own models.
+
+The completed four-model GT2 contribution (306080 responses, 16 validated
+bundles) stays frozen. V6 changes generation, so fresh v6 pilots and answers
+are required; `rescore_v5_gt2.py` is only for the earlier scoring revision.
+İbrahim G’s v6 pilots are submitted and full generation is gated on their
+validation. Other members must validate their own v6 pilots. See the
+[walkthrough](../../docs/walkthrough/01_egitim_verisi.md) for the measured
+preflight, job IDs and completion scope. V1/v2/v3/v4/v5 artifacts stay intact.
 
 We are three members with four models each; the assignment is in [`team_v3.yaml`](team_v3.yaml) and the team
 procedure (who builds the dataset, who assembles) in the [team workflow](../../docs/team/team_workflow.md#0-üç-kişiyiz-kim-ne-yapar).
 After the dataset is frozen and shared, each member submits all their models with
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_gt2_pilot.yaml <member> 1   # pilot first
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_gt2.yaml <member> 4      # full run
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v6_pilot.yaml <member> 1   # pilot first
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v6.yaml <member> 4      # full run
 ```
 
 which calls `submit_member.sh CONFIG MODEL MEMBER NUM_SHARDS` once per model (use that directly to resubmit one model). It requests the model's `gpus` (one 96GB card for v3 models with 12B+ parameters), then runs

@@ -51,6 +51,40 @@ bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v6_pilot.yaml i
 # Dört pilotta bütün generation-budget metadata ve üç scoring kanalı doğrulanmadan tam üretime geçilmez.
 ```
 
+### V6 hazırlığı ve gönderilen pilotlar
+
+PR8, son kaynak commit’i `c8e155f833cdd222bf5c886c4251ca4608bb8ae0` üzerinde
+CI sonrası main `3978bbc039e9876597a31f50624fea2185e50ea9` olarak birleşti.
+Çalışan Tosun checkout’u `~/purerepo-v6-live`; Python kaynakları iş başladıktan
+sonra pull/reset edilmez. Ön kontrolde 7652 sorunun tamamı ArmoRM’nin pinned
+tokenizer’ıyla ölçüldü: **en uzun soru + boş assistant şablonu 2849 token**,
+limit 8192 ve güvenlik payı 1024. Hiçbir soru kırpılmadı veya elenmedi.
+30 soruluk v6 pilot seti donduruldu.
+
+| model | generation | GT / ArmoRM / BART | package |
+|---|---:|---:|---:|
+| Qwen3-32B | 4201225 | 4201226 / 4201227 / 4201228 | 4201229 |
+| Qwen3-14B | 4201230 | 4201231 / 4201232 / 4201233 | 4201234 |
+| Mistral-Nemo-12B | 4201235 | 4201236 / 4201237 / 4201238 | 4201239 |
+| Llama-3.2-3B | 4201240 | 4201241 / 4201242 / 4201243 | 4201244 |
+
+Dört pakete bağımlı **4201245** doğrulaması, `logs/check-v6-pilot.py` ile
+hash’leri, her modelde beklenen 60 anahtarı, gerçek token/context bütçelerini,
+non-thinking ayarını, nihai cevapları ve üç kanalı denetler. ArmoRM’nin gerçek
+scorer token sayısı, üretim metadata’sındaki ölçümle birebir eşleşmelidir;
+ArmoRM’de taşma veya eksik skor bulunursa tam üretim açılmaz. İzinli GT
+math-timeout durumu ayrı kaydedilir. `length` / `armorm_budget` bitişleri model
+sonucu olarak tutulur; iyi cevap gelene kadar seçerek tekrar üretim yapılmaz.
+
+Yalnız dört pilot doğrulanırsa `logs/v6-validate.sh`, `logs/v6-full.sh` işini
+bir kez gönderir. Bu iş tam v6 soru setini compute node’da build eder, 7652 soru
+ve aynı `664b6fe9a7e07132f88ef219d1315415010abc4924e9c565539489ccc81a5e0a`
+fingerprintini doğrular, sonra yalnız İbrahim G’nin dört modelini dört shard
+ile gönderir. İş numarası `logs/v6-full-job.txt`, gönderimler
+`logs/v6-full-submissions.txt`, pilot raporu `logs/v6-pilot-report.json` içine
+kaydedilir. Mevcut dosya/kuyruk kontrol edilmeden bu işler yeniden gönderilmez.
+Bu kayıt pilotların tamamlandığı veya tam üretimin başladığı iddiası değildir.
+
 Üretimdeki engine arayüzü Tosun’un kurulu vLLM kaynağından denetlendi;
 [LLM engine API](https://docs.vllm.ai/en/latest/api/vllm/v1/engine/llm_engine/)
 ve [HF durdurma kriteri](https://huggingface.co/docs/transformers/main/internal/generation_utils#transformers.StoppingCriteria)
