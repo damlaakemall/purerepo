@@ -99,3 +99,14 @@ an isolated checkout and `rescore_v5_gt2.py` for a checked copy into the new
 path, then submit only scoring/package stages for your own models. Recompute
 GT even for models whose v5 bundles are complete. See the
 [walkthrough](../../docs/walkthrough/01_egitim_verisi.md) for provenance and commands.
+
+### V6: enforce reward context while generating (23 October 2026)
+
+Use `shared_v6_pilot.yaml` for fresh pilots before full `shared_v6.yaml` production.
+Both producer output and the full ArmoRM question/answer context are capped at
+8192. A 1024-token guard reserves room for cross-tokenizer expansion. The vLLM
+engine is stopped during generation; the final measured reward length is also
+checked and an overrun fails. ArmoRM overflow is no longer an allowed missing
+score in v6. Questions and finished answers are not silently trimmed. Old GT2
+packages stay frozen; this is new generation, never a selected-overflow rerun.
+See the common walkthrough for the decision, metadata and pilot gate.
