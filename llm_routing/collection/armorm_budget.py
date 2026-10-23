@@ -22,9 +22,12 @@ class ArmoRMBudget:
         self.tok = tokenizer
 
     def count(self, query, response):
-        return len(self.tok.apply_chat_template([
+        tokens = self.tok.apply_chat_template([
             {'role': 'user', 'content': query}, {'role': 'assistant', 'content': response}],
-            tokenize=True))
+            tokenize=True, return_dict=False)
+        if not isinstance(tokens, list) or (tokens and not isinstance(tokens[0], int)):
+            raise ValueError('ArmoRM budget requires a flat token-ID list, not a tokenizer dictionary')
+        return len(tokens)
 
     def check_prompt(self, query):
         tokens = self.count(query, '')

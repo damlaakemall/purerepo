@@ -178,8 +178,8 @@ def test_unresolvable_reasoning_tags_do_not_invent_token_counts():
 
 class RewardTokenizer:
     chat_template = 'reward-template'
-    def apply_chat_template(self, messages, tokenize):
-        assert tokenize
+    def apply_chat_template(self, messages, tokenize, return_dict):
+        assert tokenize and return_dict is False
         # Deliberately differs from the producer tokenizer: characters, not words.
         return list(range(4 + len(messages[0]['content']) + len(messages[1]['content'])))
 
@@ -252,3 +252,13 @@ def test_generation_reward_budget_matches_scorer_and_all_v6_models():
     cfg['scoring']['armorm']['revision'] = 'different'
     with pytest.raises(ValueError, match='must match'):
         generation_config(cfg, model)
+
+
+def test_reward_budget_rejects_tokenizer_dictionary_instead_of_counting_its_keys():
+    from llm_routing.collection.armorm_budget import ArmoRMBudget
+    class WrongOutput:
+        def apply_chat_template(self, *args, **kwargs):
+            return {'input_ids': [1, 2, 3], 'attention_mask': [1, 1, 1]}
+    budget = ArmoRMBudget({'revision': 'pin', 'limit': 64, 'reserve_tokens': 16}, WrongOutput())
+    with pytest.raises(ValueError, match='flat token-ID list'):
+        budget.count('full question', 'full response')

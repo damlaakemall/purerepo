@@ -75,12 +75,20 @@ class Generator:
             raise ValueError("pin the model revision before generation")
         engine_kwargs = dict(m.get("engine_kwargs", {}))
         if self.engine == "vllm":
+            if self.generation.get("armorm_budget"):
+                import os
+                # Host-side counting must own each actual engine step. A busy-loop
+                # core could generate unseen tokens while the host checks a batch.
+                os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
+                engine_kwargs["async_scheduling"] = False
             from vllm import LLM
             if m.get("gpus", 1) > 1:
                 engine_kwargs.setdefault("tensor_parallel_size", m["gpus"])
             self.llm = LLM(model=self.model_id, revision=m.get("revision"), tokenizer_revision=m.get("tokenizer_revision", m.get("revision")),
                            generation_config="vllm", **engine_kwargs)
             self.tok = self.llm.get_tokenizer()
+            if self.generation.get("armorm_budget") and type(self.llm.llm_engine.engine_core).__name__ != "InprocClient":
+                raise RuntimeError("ArmoRM generation budget requires the synchronous in-process engine core")
         else:
             from transformers import AutoModelForCausalLM, AutoTokenizer
             loader = AutoModelForCausalLM

@@ -16,7 +16,11 @@ Kullanıcı “ArmoRM sınırı”nın üretimde de geçerli olmasını netleşt
 olduğu için onun çıktı tavanını 8192 yapmak tek başına yeterli değildir.
 
 Üretim sırasında aynı vLLM engine’in `add_request / step / abort_request`
-akışı kullanılır; her kısmi cevap ArmoRM tokenizer’ıyla ölçülür. Sınırdan
+akışı kullanılır; her kısmi cevap ArmoRM tokenizer’ıyla ölçülür. Engine core
+`VLLM_ENABLE_V1_MULTIPROCESSING=0` ve `async_scheduling=False` ile eşzamanlı
+adımlanır. Böylece CPU ölçüm yaparken arkada görünmeyen ek token üretilmez.
+Tokenizer’dan `return_dict=False` ile gerçek düz ID listesi istenir; bir sözlüğün
+anahtar sayısı token sayısı olarak kabul edilmez. Sınırdan
 1024 token önce durdurma tetiklenir. Bu pay, üretici token’ın farklı tokenizer’da
 birden çok token’a açılmasına ve engine adımına alan bırakır. Üretici vocabulary’sindeki
 en uzun tek-token byte açılımı bu paya göre denetlenir; gerçek bir adım payı
