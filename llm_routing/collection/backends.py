@@ -75,12 +75,20 @@ class Generator:
             raise ValueError("pin the model revision before generation")
         engine_kwargs = dict(m.get("engine_kwargs", {}))
         if self.engine == "vllm":
+            if self.generation.get("armorm_budget"):
+                import os
+                # Host-side counting must own each actual engine step. A busy-loop
+                # core could generate unseen tokens while the host checks a batch.
+                os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
+                engine_kwargs["async_scheduling"] = False
             from vllm import LLM
             if m.get("gpus", 1) > 1:
                 engine_kwargs.setdefault("tensor_parallel_size", m["gpus"])
             self.llm = LLM(model=self.model_id, revision=m.get("revision"), tokenizer_revision=m.get("tokenizer_revision", m.get("revision")),
                            generation_config="vllm", **engine_kwargs)
             self.tok = self.llm.get_tokenizer()
+            if self.generation.get("armorm_budget") and type(self.llm.llm_engine.engine_core).__name__ != "InprocClient":
+                raise RuntimeError("ArmoRM generation budget requires the synchronous in-process engine core")
         else:
             from transformers import AutoModelForCausalLM, AutoTokenizer
             loader = AutoModelForCausalLM
@@ -95,6 +103,10 @@ class Generator:
             self.tok = AutoTokenizer.from_pretrained(self.model_id, revision=m.get("tokenizer_revision", m.get("revision")))
             self.llm = loader.from_pretrained(self.model_id, revision=m.get("revision"),
                                                            device_map="auto", **engine_kwargs).eval()
+        if self.generation.get("armorm_budget"):
+            from .armorm_budget import ArmoRMBudget
+            self.armorm_budget = ArmoRMBudget(self.generation["armorm_budget"])
+            self.armorm_budget.validate_step_guard(self.tok)
         self.loaded = True
 
     def _prompt(self, query, seed):
@@ -141,6 +153,9 @@ class Generator:
         for query, seed in items:
             try:
                 ids, meta = self._prompt(query, seed)
+                if hasattr(self, "armorm_budget"):
+                    self.armorm_budget.check_prompt(query)
+                    meta["budget_query"] = query
                 if g.get("context_policy") == "cap_output":
                     context = self.model.get("engine_kwargs", {}).get("max_model_len")
                     if type(context) is not int or context <= len(ids):
@@ -160,18 +175,64 @@ class Generator:
                                  seed=items[i][1]) for i, p in live]
         start = time.perf_counter()
         try:
-            outputs = self.llm.generate([{"prompt_token_ids": p[0]} for _, p in live], params, use_tqdm=False) if live else []
+            if hasattr(self, "armorm_budget"):
+                outputs = self._budgeted_vllm(live, params)
+            else:
+                outputs = self.llm.generate([{"prompt_token_ids": p[0]} for _, p in live], params, use_tqdm=False) if live else []
         except Exception as e:
             return [p if isinstance(p, Exception) else e for p in prepared]
         per_sample = (time.perf_counter() - start) / max(len(live), 1)
         results = list(prepared)
         for (i, (_, meta)), out, p in zip(live, outputs, params):
             o = out.outputs[0]
+            if hasattr(self, "armorm_budget"):
+                query = meta.pop("budget_query")
+                try:
+                    meta.update(self.armorm_budget.metadata(query, meta["response_prefix"] + o.text))
+                except Exception as error:
+                    results[i] = error
+                    continue
             partition = reasoning_token_counts(list(o.token_ids), self.tok, o.text, meta["response_prefix"])
             results[i] = (meta["response_prefix"] + o.text, {**meta, **partition, "sampling_params": str(p), "completion_tokens": len(o.token_ids),
                                    "finish_reason": o.finish_reason, "batch_size": len(live),
                                    "batch_seconds_per_sample": per_sample})
         return results
+
+    def _budgeted_vllm(self, live, params):
+        # Drive the same vLLM engine step by step instead of waiting for finished
+        # outputs. No logits edits, extra prompt, retry, or post-hoc text trimming.
+        from copy import copy
+        engine = self.llm.llm_engine
+        requests, completed = {}, {}
+        for (index, (ids, meta)), sampling in zip(live, params):
+            request_id = f"armorm-{index}"
+            requests[request_id] = meta
+            engine.add_request(request_id, {"prompt_token_ids": ids}, sampling)
+        try:
+            while engine.has_unfinished_requests():
+                for output in engine.step():
+                    if output.request_id not in requests or output.request_id in completed:
+                        continue
+                    if not output.outputs:
+                        continue
+                    meta = requests[output.request_id]
+                    sample = output.outputs[0]
+                    stopped = self.armorm_budget.stop(meta["budget_query"], meta["response_prefix"] + sample.text)
+                    if stopped and not output.finished:
+                        engine.abort_request([output.request_id])
+                        output = copy(output)
+                        sample = copy(sample)
+                        sample.token_ids = list(sample.token_ids)
+                        sample.finish_reason = "armorm_budget"
+                        output.outputs = [sample]
+                        completed[output.request_id] = output
+                    elif output.finished:
+                        completed[output.request_id] = output
+        finally:
+            engine.abort_request(list(requests))
+        if set(completed) != set(requests):
+            raise RuntimeError("budgeted generation lost a request")
+        return [completed[f"armorm-{index}"] for index, _ in live]
 
     def _hf(self, ids, meta, seed):
         import torch
@@ -184,6 +245,15 @@ class Generator:
             if kwargs["do_sample"]:
                 kwargs.update(temperature=g["temperature"], top_p=g["top_p"])
             meta["effective_generation"] = {**self.llm.generation_config.to_dict(), **kwargs}
+            budget_stop = {"stopped": False}
+            if hasattr(self, "armorm_budget"):
+                from transformers import StoppingCriteriaList
+                def reached_budget(input_ids, scores, **unused):
+                    raw = meta["response_prefix"] + self.tok.decode(input_ids[0, len(ids):].tolist(), skip_special_tokens=True)
+                    stopped = self.armorm_budget.stop(meta["budget_query"], raw)
+                    budget_stop["stopped"] = stopped
+                    return torch.full((input_ids.shape[0],), stopped, dtype=torch.bool, device=input_ids.device)
+                kwargs["stopping_criteria"] = StoppingCriteriaList([reached_budget])
             start = time.perf_counter()
             with torch.inference_mode():
                 seq = self.llm.generate(input_ids=inputs, attention_mask=torch.ones_like(inputs),
@@ -192,6 +262,12 @@ class Generator:
                         resolved_revision=getattr(self.llm.config, "_commit_hash", None), batch_size=1,
                         batch_seconds_per_sample=time.perf_counter() - start)
             text = self.tok.decode(seq, skip_special_tokens=True)
+            if hasattr(self, "armorm_budget"):
+                query = meta.pop("budget_query")
+                meta.update(self.armorm_budget.metadata(query, meta["response_prefix"] + text))
+                if budget_stop["stopped"]:
+                    meta["finish_reason"] = "armorm_budget"
+                meta["effective_generation"].pop("stopping_criteria", None)
             meta.update(reasoning_token_counts(seq.tolist(), self.tok, text, meta["response_prefix"]))
             return meta["response_prefix"] + text, meta
         except Exception as e:

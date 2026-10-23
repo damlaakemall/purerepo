@@ -16,12 +16,18 @@ from .io import append, digest, environment, key, locked, read_jsonl, recover_ta
 def generation_config(cfg, model):
     g = {"k": 1, "engine": "vllm", "temperature": 0.7, "top_p": 0.95, "max_new_tokens": 512,
          **cfg.get("generation", {}), **model.get("generation", {})}
-    if set(g) - {"k", "engine", "temperature", "top_p", "max_new_tokens", "context_policy"}:
-        raise ValueError(f"unknown generation parameters: {set(g) - {'k', 'engine', 'temperature', 'top_p', 'max_new_tokens', 'context_policy'}}")
+    if set(g) - {"k", "engine", "temperature", "top_p", "max_new_tokens", "context_policy", "armorm_budget"}:
+        raise ValueError(f"unknown generation parameters: {set(g) - {'k', 'engine', 'temperature', 'top_p', 'max_new_tokens', 'context_policy', 'armorm_budget'}}")
     if type(g["k"]) is not int or g["k"] < 1 or g["max_new_tokens"] < 1 or g["temperature"] < 0 or not 0 < g["top_p"] <= 1:
         raise ValueError("invalid generation parameters")
     if g.get("context_policy", "error") not in ("error", "cap_output"):
         raise ValueError("context_policy must be error or cap_output")
+    if g.get("armorm_budget"):
+        budget = g["armorm_budget"]
+        reward = cfg.get("scoring", {}).get("armorm", {})
+        if (any(budget.get(k) != reward.get(k) for k in ("model_id", "revision"))
+                or reward.get("on_context_overflow", "error") != "error"):
+            raise ValueError("generation ArmoRM budget must match the pinned strict scorer")
     return g
 
 

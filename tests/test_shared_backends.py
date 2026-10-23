@@ -174,3 +174,91 @@ def test_unresolvable_reasoning_tags_do_not_invent_token_counts():
     meta = reasoning_token_counts([2, 3], Tags(), "text</think>answer", "<think>")
     assert meta["reasoning_tokens"] is None and meta["answer_tokens"] is None
     assert meta["token_partition"] == "unavailable"
+
+
+class RewardTokenizer:
+    chat_template = 'reward-template'
+    def apply_chat_template(self, messages, tokenize, return_dict):
+        assert tokenize and return_dict is False
+        # Deliberately differs from the producer tokenizer: characters, not words.
+        return list(range(4 + len(messages[0]['content']) + len(messages[1]['content'])))
+
+
+def test_reward_budget_counts_whole_chat_and_refuses_overruns():
+    from llm_routing.collection.armorm_budget import ArmoRMBudget
+    budget = ArmoRMBudget({'model_id': 'reward', 'revision': 'pinned', 'limit': 20,
+                          'reserve_tokens': 8}, RewardTokenizer())
+    assert budget.check_prompt('abc') == 7
+    assert not budget.stop('abc', '1234')
+    assert budget.stop('abc', '12345')
+    assert budget.metadata('abc', '12345')['armorm_generation_budget']['tokens'] == 12
+    with pytest.raises(ValueError, match='no safe ArmoRM output room'):
+        budget.check_prompt('x' * 8)
+    with pytest.raises(ValueError, match='guard overrun'):
+        budget.stop('abc', 'x' * 14)
+    with pytest.raises(ValueError, match='final answer exceeds'):
+        budget.metadata('abc', 'x' * 14)
+
+
+def test_reward_budget_stops_vllm_without_trimming_or_replacing_tokens():
+    from llm_routing.collection.armorm_budget import ArmoRMBudget
+    class Engine:
+        def __init__(self):
+            self.active = False; self.step_number = 0; self.aborts = []
+        def add_request(self, request_id, prompt, sampling):
+            assert prompt == {'prompt_token_ids': [1, 2]}
+            assert sampling.seed == 77
+            self.active = True
+        def has_unfinished_requests(self):
+            return self.active
+        def step(self):
+            self.step_number += 1
+            return [SimpleNamespace(request_id='armorm-0', finished=False, outputs=[
+                SimpleNamespace(text='a' * self.step_number, token_ids=list(range(self.step_number)), finish_reason=None)])]
+        def abort_request(self, request_ids):
+            self.aborts += request_ids; self.active = False
+    generator = Generator({'model_id': 'fake', 'revision': 'pinned'}, {})
+    generator.armorm_budget = ArmoRMBudget({'model_id': 'reward', 'revision': 'pinned',
+                                           'limit': 20, 'reserve_tokens': 8}, RewardTokenizer())
+    engine = Engine(); generator.llm = SimpleNamespace(llm_engine=engine)
+    outputs = generator._budgeted_vllm([(0, ([1, 2], {'budget_query': 'abc', 'response_prefix': ''}))],
+                                       [SimpleNamespace(seed=77)])
+    sample = outputs[0].outputs[0]
+    assert engine.step_number == 5 and sample.text == 'aaaaa'
+    assert sample.token_ids == [0, 1, 2, 3, 4] and sample.finish_reason == 'armorm_budget'
+    assert generator.armorm_budget.count('abc', sample.text) == 12 < 20
+
+
+def test_reward_budget_step_guard_requires_room_for_producer_tokens():
+    from llm_routing.collection.armorm_budget import ArmoRMBudget
+    budget = ArmoRMBudget({'revision': 'pin', 'limit': 64, 'reserve_tokens': 32}, RewardTokenizer())
+    producer = SimpleNamespace(vocab_size=2, decode=lambda ids, **kw: 'x' * (ids[0] + 1))
+    assert budget.validate_step_guard(producer) == 2
+    producer.decode = lambda ids, **kw: 'x' * 33
+    with pytest.raises(ValueError, match='producer token can exceed'):
+        budget.validate_step_guard(producer)
+
+
+def test_generation_reward_budget_matches_scorer_and_all_v6_models():
+    from llm_routing.config import load_benchmark_config
+    from llm_routing.collection.collect import generation_config
+    from llm_routing.collection.dataset import model_pool
+    cfg = load_benchmark_config('configs/benchmarks/shared_v6.yaml')
+    for model in model_pool(cfg).values():
+        generation = generation_config(cfg, model)
+        assert generation['max_new_tokens'] == 8192
+        assert generation['armorm_budget']['limit'] == 8192
+        assert generation['armorm_budget']['reserve_tokens'] == 1024
+    cfg['scoring']['armorm']['revision'] = 'different'
+    with pytest.raises(ValueError, match='must match'):
+        generation_config(cfg, model)
+
+
+def test_reward_budget_rejects_tokenizer_dictionary_instead_of_counting_its_keys():
+    from llm_routing.collection.armorm_budget import ArmoRMBudget
+    class WrongOutput:
+        def apply_chat_template(self, *args, **kwargs):
+            return {'input_ids': [1, 2, 3], 'attention_mask': [1, 1, 1]}
+    budget = ArmoRMBudget({'revision': 'pin', 'limit': 64, 'reserve_tokens': 16}, WrongOutput())
+    with pytest.raises(ValueError, match='flat token-ID list'):
+        budget.count('full question', 'full response')

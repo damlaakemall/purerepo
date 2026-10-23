@@ -8,6 +8,55 @@
 > **Durum (23 Ekim 2026):** İbrahim G’nin dört modelindeki 306080 cevap ve 16 GT2 paketi
 > doğrulandı. Diğer üyelerin sekiz modeli bu sonuca dahil değildir; 12 modellik ortak release henüz tamamlanmadı.
 
+## shared_v6: ArmoRM sınırı üretime uygulanır — 23 Ekim 2026
+
+Kullanıcı “ArmoRM sınırı”nın üretimde de geçerli olmasını netleştirdi. Yeni v6,
+12 modelin tamamında **ArmoRM tokenizer’ı ve chat template’iyle soru + cevap
++ şablon toplamını 8192 token içinde** tutar. Üreten modelin tokenizer’ı farklı
+olduğu için onun çıktı tavanını 8192 yapmak tek başına yeterli değildir.
+
+Üretim sırasında aynı vLLM engine’in `add_request / step / abort_request`
+akışı kullanılır; her kısmi cevap ArmoRM tokenizer’ıyla ölçülür. Engine core
+`VLLM_ENABLE_V1_MULTIPROCESSING=0` ve `async_scheduling=False` ile eşzamanlı
+adımlanır. Böylece CPU ölçüm yaparken arkada görünmeyen ek token üretilmez.
+Tokenizer’dan `return_dict=False` ile gerçek düz ID listesi istenir; bir sözlüğün
+anahtar sayısı token sayısı olarak kabul edilmez. Sınırdan
+1024 token önce durdurma tetiklenir. Bu pay, üretici token’ın farklı tokenizer’da
+birden çok token’a açılmasına ve engine adımına alan bırakır. Üretici vocabulary’sindeki
+en uzun tek-token byte açılımı bu paya göre denetlenir; gerçek bir adım payı
+buna rağmen aşarsa üretim hata verir. Son nihai metin ayrıca ArmoRM ile tekrar
+ölçülür: 8192 üstü cevap başarılı veri olarak kaydedilemez. Bu doğrulama, pilot
+ve tam paket denetiminde de zorunludur; yaklaşık token oranı garanti diye sunulmaz.
+
+HF backend aynı kontrolü `StoppingCriteria` ile yapar. Her iki backend’de de
+sadece durma kararı değişir: ek system prompt, logits değişikliği veya sonradan
+metin kırpma yoktur. Ham üretilen token ID’leri sayılır; durdurma nedeni
+`armorm_budget`, metadata `armorm_generation_budget.tokens/limit/reserve_tokens`
+olarak kaydedilir. EOS önce gelirse normal `stop` geçerlidir. Üreticinin kendi
+çıktı tavanı da bütün modellerde 8192’dir; model context’i ayrıca prompt’a yer ayırır.
+Soru tek başına güvenli üretim alanı bırakmıyorsa açık hata verilir; soru kırpılmaz.
+
+Bu yeni üretim protokolüdür: `shared_v6.yaml`, `shared_v6_pilot.yaml`,
+`team_v6.yaml` ayrı sürüm ve veri kökü kullanır. Tamamlanmış v5/GT2 cevapları ve
+puanları korunur; yeni bütçeye uydurmak için kırpılmaz veya yalnız taşan cevaplar
+seçilerek tekrar üretilmez. Tutarlı v6 veri için İbrahim G’nin dört modeli yeni
+pilot sonrasında yeni sürümde üretilir. Diğer üyelerin modelleri bu hesapta çalıştırılmaz.
+Fiyatlar, model revision’ları, kaynaklar, split kuralı, non-thinking Qwen ve
+GT’nin600s/eksik math-timeout politikası değişmedi. ArmoRM taşması v6’da
+`on_context_overflow: error` olduğu için sessiz eksik skora dönüşmez.
+
+```bash
+llmr build-queries configs/benchmarks/shared_v6_pilot.yaml
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v6_pilot.yaml ibrahimg 1
+# Dört pilotta bütün generation-budget metadata ve üç scoring kanalı doğrulanmadan tam üretime geçilmez.
+```
+
+Üretimdeki engine arayüzü Tosun’un kurulu vLLM kaynağından denetlendi;
+[LLM engine API](https://docs.vllm.ai/en/latest/api/vllm/v1/engine/llm_engine/)
+ve [HF durdurma kriteri](https://huggingface.co/docs/transformers/main/internal/generation_utils#transformers.StoppingCriteria)
+aynı mekanizmaları açıklar. Gerçek v6 pilot sonucu henüz bu bölümde tamamlandı
+olarak sunulmaz; doğrulama sonrası komut ve sayıları buraya eklenecektir.
+
 ## shared_v5_gt2: kesinleşen matematik süre sınırı — 22 Ekim 2026
 
 Bütün 12 model için **OlympiadBench cevap kontrolü başına 600 saniye** duvar

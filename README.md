@@ -22,6 +22,13 @@ place where we deviate ([CONTRIBUTING.md → Keep it simple](CONTRIBUTING.md#kee
 
 ## Where we are now
 
+The next production protocol is [`shared_v6`](configs/benchmarks/shared_v6.yaml):
+ArmoRM’s pinned tokenizer measures the full question/answer chat during generation;
+a guarded engine stop keeps successful answers within its 8192-token context.
+The producer ceiling is also 8192 new tokens. Fresh four-model pilots must pass
+before full v6 collection; the completed GT2 contribution remains available.
+
+
 Settled scoring revision: [`shared_v5_gt2`](configs/benchmarks/shared_v5_gt2.yaml)
 adds a 600-second OlympiadBench check deadline for all 12 models. Timed-out GT
 remains missing; frozen v5 answers are reused without regeneration.
