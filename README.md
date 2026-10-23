@@ -28,15 +28,15 @@ remains missing; frozen v5 answers are reused without regeneration.
 See [the decision and migration procedure](docs/walkthrough/01_egitim_verisi.md#shared_v5_gt2-kesinleşen-matematik-süre-sınırı--22-ekim-2026).
 
 
-The next collection is **`shared_v5`** (İbrahim G’s pilots validated; his four-model full collection running; v3/v4 stay frozen): 12 local open models with publicly verifiable, frozen
+The current scoring revision is **`shared_v5_gt2`** (İbrahim G’s four-model contribution validated; v3/v4/v5 stay frozen): 12 local open models with publicly verifiable, frozen
 OpenRouter provider tariffs. Six v2 models are retained and six are replaced. Costs are **estimated
 API USD**, computed from local input/output token counts, not a Tosun bill. Generation stays on Tosun,
-with `top_p: 1.0`; v5 disables Qwen3 thinking across the pool and uses 16384 output tokens (Phi-4: 12288), reserving prompt room within model context; ArmoRM overflows remain missing. İbrahim G’s four v5 GPU pilots passed the collection checks; the other members’ eight models still need pilots. Existing v1/v2/v3/v4 configs and data
+with `top_p: 1.0`; v5 disables Qwen3 thinking across the pool and uses 16384 output tokens (Phi-4: 12288), reserving prompt room within model context; ArmoRM overflows remain missing. İbrahim G’s four v5 GPU pilots passed the collection checks; the other members’ eight models still need pilots. Existing v1/v2/v3/v4/v5 configs and data
 stay intact. See [the pool, prices and procedure](docs/walkthrough/01_egitim_verisi.md#shared_v3-fiyatı-doğrulanabilen-model-havuzu).
 
 | | status |
 |---|---|
-| Shared collection protocol | Four v5 GPU pilots validated (240 responses; 2 declared missing ArmoRM scores); İbrahim G’s four-model full collection running |
+| Shared collection protocol | İbrahim G’s four-model GT2 contribution validated: 306080 responses in 16 bundles; the other eight models are still pending |
 | Routers | one baseline: *quality regression* (from RouterBench) |
 | Planned paper routers | Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT |
 | Open decisions | mixed quality scales, shared accounts, GPU pilots, Hybrid pair and UniRoute pool split ([DECISIONS.md](DECISIONS.md)) |
@@ -88,9 +88,9 @@ Do the one-time setup in [cluster/tosun/README.md](cluster/tosun/README.md), the
 30-query v5 pilot:
 
 ```bash
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_pilot.yaml <member> 1        # pilot, your 4 models
-python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v5_pilot.yaml <model> <member>   # check each one
-bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5.yaml <member> 4           # full run
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_gt2_pilot.yaml <member> 1        # pilot, your 4 models
+python cluster/tosun/inspect_shard.py configs/benchmarks/shared_v5_gt2_pilot.yaml <model> <member>   # check each one
+bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v5_gt2.yaml <member> 4           # full run
 ```
 
 Router training on Tosun uses `bash cluster/tosun/submit_train.sh <experiment.yaml> <num_seeds>`. The only
@@ -101,10 +101,10 @@ pieces they need are in place; the routers themselves are still planned ([how to
 The [training walkthrough (Türkçe)](docs/walkthrough/02_router_egitimi.md) records the checked path from
 an assembled test-double release to training. The three paper implementations and real GPU runs are pending.
 
-## The next shared data (`shared_v5`)
+## The shared data (`shared_v5_gt2`)
 
 - **Questions:** GSM8K, MMLU-Pro, BBH, OlympiadBench, MBPP, Alpaca, Multi-News
-  ([`configs/benchmarks/shared_v5.yaml`](configs/benchmarks/shared_v5.yaml)), split once into
+  ([`configs/benchmarks/shared_v5_gt2.yaml`](configs/benchmarks/shared_v5_gt2.yaml)), split once into
   train / val / test and frozen.
 - **Models:** 12 open-weight models from 3B to 33B, pinned to exact Hugging Face commits
   ([`configs/model_pools/team_v5.yaml`](configs/model_pools/team_v5.yaml)). Each answers every question 10 times. V5 uses non-thinking Qwen3 and a 16384 output ceiling across the pool (Phi-4: 12288); prompt space is reserved within each model’s context. Actual tokens determine cost.
