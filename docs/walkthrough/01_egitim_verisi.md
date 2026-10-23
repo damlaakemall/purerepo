@@ -5,8 +5,8 @@
 > Soruları seçeriz, 12 modele cevaplatırız (Tosun GPU'larında), her cevabı puanlar ve maliyetini sayarız.
 > Sonraki adımda router'lar bu tablonun train kısmıyla eğitilip test kısmında karşılaştırılacak.
 >
-> **Durum (15 Ekim 2026):** akış hazır ve 30 soruluk bir pilotla gerçek GPU'da uçtan uca doğrulandı. Tam
-> koleksiyon (7652 soru × 12 model × 10 cevap) henüz yapılmadı.
+> **Durum (23 Ekim 2026):** İbrahim G’nin dört modelindeki 306080 cevap ve 16 GT2 paketi
+> doğrulandı. Diğer üyelerin sekiz modeli bu sonuca dahil değildir; 12 modellik ortak release henüz tamamlanmadı.
 
 ## shared_v5_gt2: kesinleşen matematik süre sınırı — 22 Ekim 2026
 
@@ -31,8 +31,8 @@ ve kanallar bağımsız doğrulandı:
 Bunlar **eski v5** sayılarıdır; yeni GT2 sonuçları olarak sunulmaz. Llama’nın
 GT shard 0’ında 19390 cevaptan 18256 kayıt yazıldıktan sonra ilerleme durdu;
 1134 kayıt kaldı. Takılan `4121908_0` (somut job `4121990`) durduruldu;
-üretilmiş cevaplar ve önceki skorlar silinmedi. Diğer Llama puanlama aşamaları
-bu işin başarısına bağımlı olduğundan tamamlanmış sayılmaz.
+üretilmiş cevaplar ve önceki skorlar silinmedi. O anda diğer Llama puanlama aşamaları
+bu işin başarısına bağımlı olduğundan tamamlanmamıştı.
 
 Bu kararın nedeni Llama’nın `olympiadbench/673dbb00cc49c41098c5c9e9`, sample 6
 cevabındaki binlerce tekrarın SymPy sayısal karşılaştırmasını 20 saatten uzun
@@ -61,9 +61,70 @@ benzersiz başarılı cevapları hash’leriyle kontrol eder, GT’yi kopyalamaz
 Değişmeyen ArmoRM/BARTScore kayıtları varsa korunup kaldığı yerden sürdürülür.
 İş gönderimi yalnız üyeye atanmış dört model içindir; diğer üyeler aynı kararı
 kendi modellerine uygular. Sırf tekrar için `submit_my_models.sh` çalıştırılmaz.
-Bu bölüm karar ve uygulanabilir prosedürdür; GT2 tam sonuçlarının tamamlandığı
-anlamına gelmez. Son doğrulamada `allowed_missing_scores.ground_truth` ve kanal
-kapsaması ayrıca raporlanacaktır.
+Bu bölüm ortak karar ve prosedürdür. İbrahim G’nin tamamlanan GT2 katkısının
+gerçek sayıları ve kanal kapsamı aşağıda ayrıca raporlanır; diğer üyelerin
+modelleri tamamlanmış sayılmaz.
+
+### İbrahim G’nin tamamlanan GT2 katkısı — 23 Ekim 2026
+
+**306080/306080 cevap, 16/16 paket doğrulandı.** Aynı 7652 soru (train 4633,
+val 753, test 2266), dört model ve soru başına k=10 kullanıldı. Dataset kimliği
+`664b6fe9a7e07132f88ef219d1315415010abc4924e9c565539489ccc81a5e0a`.
+Bu, İbrahim G’nin dört modellik katkısıdır; diğer üyelerin sekiz modeli ve
+12 modellik ortak frozen release henüz tamamlanmış sayılmaz. Router eğitimi başlatılmadı.
+
+| model | cevap | stop / length | GT skor / eksik | ArmoRM skor / eksik | BARTScore | tahmini API USD |
+|---|---:|---:|---:|---:|---:|---:|
+| Qwen3-32B | 76520 | 76464 / 56 | 76520 / 0 | 76454 / 66 | 76520 | 12.21868848 |
+| Qwen3-14B | 76520 | 76446 / 74 | 76520 / 0 | 76422 / 98 | 76520 | 10.00016360 |
+| Mistral-Nemo-12B | 76520 | 76367 / 153 | 76518 / 2 | 76362 / 158 | 76520 | 0.99826545 |
+| Llama-3.2-3B | 76520 | 75793 / 727 | 76519 / 1 | 75544 / 976 | 76520 | 14.32077455 |
+
+GT kapsamı **306077/306080 (%99.9990)**, ArmoRM kapsamı
+**304782/306080 (%99.5759)**, BARTScore **306080/306080 (%100)**.
+Üç GT eksikliği `math_timeout` (Nemo 2, Llama 1; sınır 600 saniye),
+1298 ArmoRM eksikliği ölçülen `context_overflow` durumudur. Hiçbiri sıfırla
+veya başka kanalla doldurulmadı. Başka eksik anahtar veya başarısız scorer kaydı
+bulunmadı. Toplam 1010 `length` sonucu tutuldu; örnekler seçilerek yeniden
+üretilmedi. Doğal `stop`, cevabın doğru veya tekrarsız olduğu anlamına gelmez.
+
+Toplam **68527730 prompt token**, **140515680 completion token** ve
+**37.53789208 estimated API USD** hesaplandı. Bu Tosun gideri veya provider
+faturası değildir; aynı donmuş 2026-10-19 input/output tarifeleri kullanıldı.
+Bütün cevaplarda token ayrımı `generated_ids` olarak çözüldü; gerçek
+reasoning+answer toplamı completion sayısına eşit ve context/etkin çıktı
+bütçesi içindeydi. Ham cevap, model/revision ve Qwen non-thinking ayarı doğrulandı.
+
+İş zinciri: aktarım **4178857**, GT **4178858** (array 0–15), yalnız Llama için
+ArmoRM **4178859** ve BARTScore **4178860** (0–3), paket **4178861** (0–15).
+GT/package indeksinde `index//4` sırasıyla Qwen32, Qwen14, Nemo, Llama;
+`index%4` shard’dır. Diğer üç modelin değişmeyen reward kayıtları korunmuştur.
+Tüm modellerin GT’si tek yeni politika ile yeniden hesaplandı.
+
+Son denetim CPU compute node üzerinde çalıştırıldı:
+
+```bash
+cd ~/purerepo-v5-gt2
+export LLMR_REPO="$PWD" PYTHONPATH="$PWD"
+source cluster/tosun/config.sh
+llmr_activate
+srun --input=none --partition=cuda --qos=cuda --mem=8G --cpus-per-task=2 --time=00:20:00 python logs/validate-gt2.py
+# ALL_VERIFIED 306080
+```
+
+Denetim, 16 manifestin bütün dosya hash’lerini; her shard’ın beklenen soru/model/
+örnek anahtarlarını; cevap ve skor hash’lerini; evaluator kimliği ve kanalların
+tam kayıtlarını; yalnız izinli eksik nedenlerini; context/token/model/pricing
+bilgilerini kontrol etti. `generation_origin` içindeki özgün run/ortam ayrıca
+eski v5 `run.json` ile birebir karşılaştırıldı. Cevap dosyalarının byte hash’leri
+hem yeni paketle hem özgün v5 kaynakla aynıdır: yeniden üretim veya ham veri
+üzerine yazma yoktur.
+
+Paketler Tosun’da `~/llmr_data/benchmarks/shared_v5_gt2/exports/ibrahimg-<model>-<shard>-of-00004`
+altındadır. Rapor `~/purerepo-v5-gt2/logs/v5-gt2-final-report.json`, denetim
+çıktısı `logs/v5-gt2-final-validation-compute.txt` içinde saklanır. Ham cevap,
+JSONL veya ağırlıklar GitHub’a eklenmez. Bu katkı tamamlandığı için zamanlanmış
+takip kapatılır; ortak 12 modellik assembly diğer katkıları bekler.
 
 ## shared_v5: bütün havuza uygulanan bütçe ve nihai cevap politikası
 
