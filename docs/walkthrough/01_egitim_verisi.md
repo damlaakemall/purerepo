@@ -5,8 +5,10 @@
 > Soruları seçeriz, 12 modele cevaplatırız (Tosun GPU'larında), her cevabı puanlar ve maliyetini sayarız.
 > Sonraki adımda router'lar bu tablonun train kısmıyla eğitilip test kısmında karşılaştırılacak.
 >
-> **Durum (23 Ekim 2026):** İbrahim G’nin dört modelindeki 306080 cevap ve 16 GT2 paketi
-> doğrulandı. Diğer üyelerin sekiz modeli bu sonuca dahil değildir; 12 modellik ortak release henüz tamamlanmadı.
+> **Durum (24 Ekim 2026):** İbrahim G’nin dört modelindeki 306080 cevap ve 16 GT2 paketi
+> doğrulandı. Yeni v6 pilotunun 240 cevabı ve üç puanlama kanalı da doğrulandı; ArmoRM taşması yok.
+> V6 tam toplaması başladı, henüz tamamlanmadı. Diğer üyelerin sekiz modeli bu sonuca dahil değildir;
+> 12 modellik ortak release henüz tamamlanmadı.
 
 ## shared_v6: ArmoRM sınırı üretime uygulanır — 23 Ekim 2026
 
@@ -83,13 +85,61 @@ fingerprintini doğrular, sonra yalnız İbrahim G’nin dört modelini dört sh
 ile gönderir. İş numarası `logs/v6-full-job.txt`, gönderimler
 `logs/v6-full-submissions.txt`, pilot raporu `logs/v6-pilot-report.json` içine
 kaydedilir. Mevcut dosya/kuyruk kontrol edilmeden bu işler yeniden gönderilmez.
-Bu kayıt pilotların tamamlandığı veya tam üretimin başladığı iddiası değildir.
+
+### Doğrulanan V6 pilotu ve tam toplamaya geçiş
+
+**4201245** doğrulaması geçti; `logs/v6-pilot-report.json` gerçek dört paket
+sonucunu kaydeder. Her modelde 30 soru × 2 örnek = 60 cevap vardır. Dosya
+hash’leri, beklenen anahtarlar, model/revision, non-thinking Qwen ayarı,
+nihai cevaplar ve gerçek token/context bütçeleri denetlendi. ArmoRM scorer’ının
+sayımı ve şablon hash’i üretim metadata’sıyla her cevapta eşleşti.
+
+| model | cevap | stop / length / armorm_budget | en büyük ArmoRM chat token sayısı | GT / ArmoRM / BART |
+|---|---:|---:|---:|---:|
+| Qwen3-32B | 60 | 60 / 0 / 0 | 4254 | 60 / 60 / 60 |
+| Qwen3-14B | 60 | 60 / 0 / 0 | 4239 | 60 / 60 / 60 |
+| Mistral-Nemo-12B | 60 | 58 / 1 / 1 | 7168 | 60 / 60 / 60 |
+| Llama-3.2-3B | 60 | 59 / 0 / 1 | 7168 | 60 / 60 / 60 |
+
+Toplam **240 cevap ve her kanalda 240 skor** vardır; izinli eksik skor ve ArmoRM
+taşması yoktur. İki `armorm_budget` bitişi güvenlik payında durduruldu; Nemo’nun
+bir `length` bitişi de model sonucu olarak korundu. Hiçbiri seçilerek yeniden
+üretilmedi. Pilotun toplam tahmini API maliyeti **0.027635962 USD**’dir; gerçek
+prompt ve toplam completion token’larına dondurulmuş tarifeler uygulanmıştır.
+Bu bir GPU faturası değildir.
+
+Başarılı doğrulama `logs/v6-full.sh` işini **4201274** olarak bir kez gönderdi.
+Tam set **7652 soru** (train 4633, val 753, test 2266) ve yukarıdaki aynı dataset
+fingerprintiyle kuruldu. Her model için k=10 ile **76520**, dört model için
+**306080 cevap** planlanır. Aşağıdaki bütün işler 0–3 shard array’leridir:
+
+| model | generation | GT / ArmoRM / BART | package |
+|---|---:|---:|---:|
+| Qwen3-32B | 4201275 | 4201276 / 4201277 / 4201278 | 4201279 |
+| Qwen3-14B | 4201281 | 4201282 / 4201283 / 4201284 | 4201285 |
+| Mistral-Nemo-12B | 4201286 | 4201287 / 4201288 / 4201289 | 4201290 |
+| Llama-3.2-3B | 4201291 | 4201292 / 4201293 / 4201294 | 4201295 |
+
+Çalışan checkout’ta durumu görmek için kullanılan komutlar:
+
+```bash
+cd ~/purerepo-v6-live
+cat logs/v6-pilot-report.json
+cat logs/v6-full-job.txt logs/v6-full-submissions.txt
+squeue -u "$USER" -o '%.22i %.12T %.12M %.35R'
+```
+
+İşler zaten gönderilmiştir; bu kayıt yeni bir `submit_my_models.sh` çağrısı
+gerektirmez. Tam üretim ve sonraki puanlama/paketleme henüz bitmedi. Son kontrolde
+Qwen32 ve Llama üretimleri çalışıyor, Qwen14 ve Nemo GPU kaynağı bekliyordu.
+Bağımlı puanlama işlerinin beklemesi tek başına hata değildir. Tam katkının
+başarısı, 16 paketin ve 306080 anahtarın ayrıca doğrulanmasından sonra yazılacaktır.
 
 Üretimdeki engine arayüzü Tosun’un kurulu vLLM kaynağından denetlendi;
 [LLM engine API](https://docs.vllm.ai/en/latest/api/vllm/v1/engine/llm_engine/)
 ve [HF durdurma kriteri](https://huggingface.co/docs/transformers/main/internal/generation_utils#transformers.StoppingCriteria)
-aynı mekanizmaları açıklar. Gerçek v6 pilot sonucu henüz bu bölümde tamamlandı
-olarak sunulmaz; doğrulama sonrası komut ve sayıları buraya eklenecektir.
+aynı mekanizmaları açıklar. Yukarıdaki sonuçlar yalnız İbrahim G’nin dört
+modelinin pilotuna aittir; diğer sekiz modelin pilotu veya ortak release sonucu değildir.
 
 ## shared_v5_gt2: kesinleşen matematik süre sınırı — 22 Ekim 2026
 

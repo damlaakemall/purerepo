@@ -22,11 +22,13 @@ place where we deviate ([CONTRIBUTING.md → Keep it simple](CONTRIBUTING.md#kee
 
 ## Where we are now
 
-The next production protocol is [`shared_v6`](configs/benchmarks/shared_v6.yaml):
+The active production protocol is [`shared_v6`](configs/benchmarks/shared_v6.yaml):
 ArmoRM’s pinned tokenizer measures the full question/answer chat during generation;
 a guarded engine stop keeps successful answers within its 8192-token context.
-The producer ceiling is also 8192 new tokens. Fresh four-model pilots must pass
-before full v6 collection; the completed GT2 contribution remains available.
+The producer ceiling is also 8192 new tokens. İbrahim G’s four-model pilot passed:
+240 responses and 240 scores in each channel, with no ArmoRM overflow. His full
+v6 collection has started and is not yet complete; the completed GT2 contribution
+remains available. Other members must validate their own pilots.
 
 
 Settled scoring revision: [`shared_v5_gt2`](configs/benchmarks/shared_v5_gt2.yaml)
@@ -43,7 +45,7 @@ stay intact. See [the pool, prices and procedure](docs/walkthrough/01_egitim_ver
 
 | | status |
 |---|---|
-| Shared collection protocol | GT2 contribution validated (306080 responses, 16 bundles); fresh four-model v6 pilots submitted, full generation gated on validation |
+| Shared collection protocol | GT2 contribution validated (306080 responses, 16 bundles); four-model v6 pilot validated (240 responses, no ArmoRM overflow), full v6 collection running |
 | Routers | one baseline: *quality regression* (from RouterBench) |
 | Planned paper routers | Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT |
 | Open decisions | mixed quality scales, shared accounts, GPU pilots, Hybrid pair and UniRoute pool split ([DECISIONS.md](DECISIONS.md)) |
@@ -92,7 +94,7 @@ shares the dataset once and assembles everyone's bundles at the end. The steps a
 [team guide (Türkçe)](docs/team/team_workflow.md#0-üç-kişiyiz-kim-ne-yapar).
 
 Do the one-time setup in [cluster/tosun/README.md](cluster/tosun/README.md), then always start with the
-30-query v5 pilot:
+30-query v6 pilot:
 
 ```bash
 bash cluster/tosun/submit_my_models.sh configs/benchmarks/shared_v6_pilot.yaml <member> 1        # pilot, your 4 models
