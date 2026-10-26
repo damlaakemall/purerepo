@@ -77,14 +77,18 @@ context (32768 total, Phi-4: 16384). ArmoRM context overflow is fatal in v6.
 Known absent-final reward records and the configured 600-second math deadline
 retain their explicit missing-score policies. The frozen v3 tariffs and member
 assignments are reused; costs use actual generated tokens, never the ceiling.
-`collection_team` selects `team_v3.yaml`; each member runs only their own models.
+`collection_team` selects `team_v3.yaml`; use the assigned member’s contribution path.
+The coordinator is explicitly authorized to collect Damla’s assigned four models
+after his own contribution is verified; İbrahim B’s jobs are outside that authorization.
 
 The completed four-model GT2 contribution (306080 responses, 16 validated
 bundles) stays frozen. V6 changes generation, so fresh v6 pilots and answers
 are required; `rescore_v5_gt2.py` is only for the earlier scoring revision.
 İbrahim G’s four v6 pilots passed (240 responses and full coverage in all three
-channels, no ArmoRM overflow); his full v6 collection is running. Other members
-must validate their own v6 pilots. See the
+channels, no ArmoRM overflow); his full v6 contribution is validated (306080
+responses, 16 bundles, two allowed GT math timeouts, no ArmoRM overflow). Damla’s
+Coder/Phi pilots are submitted; her Gemma pilots await gated access. All four
+Damla pilots must pass before her full collection. See the
 [walkthrough](../../docs/walkthrough/01_egitim_verisi.md) for the measured
 preflight, job IDs and completion scope. V1/v2/v3/v4/v5 artifacts stay intact.
 

@@ -5,10 +5,10 @@
 > Soruları seçeriz, 12 modele cevaplatırız (Tosun GPU'larında), her cevabı puanlar ve maliyetini sayarız.
 > Sonraki adımda router'lar bu tablonun train kısmıyla eğitilip test kısmında karşılaştırılacak.
 >
-> **Durum (24 Ekim 2026):** İbrahim G’nin dört modelindeki 306080 cevap ve 16 GT2 paketi
-> doğrulandı. Yeni v6 pilotunun 240 cevabı ve üç puanlama kanalı da doğrulandı; ArmoRM taşması yok.
-> V6 tam toplaması başladı, henüz tamamlanmadı. Diğer üyelerin sekiz modeli bu sonuca dahil değildir;
-> 12 modellik ortak release henüz tamamlanmadı.
+> **Durum (26 Ekim 2026):** İbrahim G’nin v6 katkısı tamamlandı: 306080 cevap ve 16 paket
+> doğrulandı; ArmoRM taşması yok. GT’de iki izinli matematik süre aşımı vardır.
+> Damla’nın Qwen2.5-Coder ve Phi-4 pilotları gönderildi; iki Gemma modeli erişim bekliyor.
+> Önceki GT2 katkısı korunur. 12 modellik ortak release henüz tamamlanmadı.
 
 ## shared_v6: ArmoRM sınırı üretime uygulanır — 23 Ekim 2026
 
@@ -42,7 +42,9 @@ Bu yeni üretim protokolüdür: `shared_v6.yaml`, `shared_v6_pilot.yaml`,
 `team_v6.yaml` ayrı sürüm ve veri kökü kullanır. Tamamlanmış v5/GT2 cevapları ve
 puanları korunur; yeni bütçeye uydurmak için kırpılmaz veya yalnız taşan cevaplar
 seçilerek tekrar üretilmez. Tutarlı v6 veri için İbrahim G’nin dört modeli yeni
-pilot sonrasında yeni sürümde üretilir. Diğer üyelerin modelleri bu hesapta çalıştırılmaz.
+pilot sonrasında yeni sürümde üretilir. 24 Ekim’de kullanıcı, İbrahim G’nin katkısı
+tamamen doğrulandıktan sonra Damla’nın atanmış dört modelinin de bu hesapta,
+`member=damla` katkı yollarında toplanmasını istedi. İbrahim B’nin modelleri bu yetkinin dışındadır.
 Fiyatlar, model revision’ları, kaynaklar, split kuralı, non-thinking Qwen ve
 GT’nin600s/eksik math-timeout politikası değişmedi. ArmoRM taşması v6’da
 `on_context_overflow: error` olduğu için sessiz eksik skora dönüşmez.
@@ -130,10 +132,84 @@ squeue -u "$USER" -o '%.22i %.12T %.12M %.35R'
 ```
 
 İşler zaten gönderilmiştir; bu kayıt yeni bir `submit_my_models.sh` çağrısı
-gerektirmez. Tam üretim ve sonraki puanlama/paketleme henüz bitmedi. Son kontrolde
-Qwen32 ve Llama üretimleri çalışıyor, Qwen14 ve Nemo GPU kaynağı bekliyordu.
-Bağımlı puanlama işlerinin beklemesi tek başına hata değildir. Tam katkının
-başarısı, 16 paketin ve 306080 anahtarın ayrıca doğrulanmasından sonra yazılacaktır.
+gerektirmez. Bağımlı puanlama işlerinin beklemesi tek başına hata değildir.
+
+### İbrahim G’nin tamamlanan V6 katkısı — 26 Ekim 2026
+
+**16 paketin tamamı ve 306080 cevap doğrulandı.** Compute node üzerinde
+`logs/check-v6-full.py` manifest/dosya hash’lerini, her shard’ın beklenen tam
+anahtar kümesini, response/score/evaluator hash’lerini, soru metnini, seed’i,
+model/revision’ı, native token ayrımını, context ve ArmoRM bütçesini denetledi.
+`logs/audit-v6-origin.py` ayrıca bütün modellerde 76520 benzersiz anahtarı ve
+üretim/puanlama kaynak hash’lerinin eşitliğini kontrol etti. Canlı Python
+`c8e155f833cdd222bf5c886c4251ca4608bb8ae0` olarak kaldı; kaynak hash’i
+`1f7b790d0164f009aa804d7f6877460c8bddf40bd227a2c29fe0f3b0c602611f`.
+
+| model | cevap | stop / length / armorm_budget | GT / ArmoRM / BART | en büyük ArmoRM token |
+|---|---:|---:|---:|---:|
+| Qwen3-32B | 76520 | 76441 / 31 / 48 | 76520 / 76520 / 76520 | 7169 |
+| Qwen3-14B | 76520 | 76410 / 42 / 68 | 76520 / 76520 / 76520 | 7169 |
+| Mistral-Nemo-12B | 76520 | 76369 / 34 / 117 | 76518 / 76520 / 76520 | 7169 |
+| Llama-3.2-3B | 76520 | 75564 / 0 / 956 | 76520 / 76520 / 76520 | 7170 |
+
+ArmoRM ve BARTScore’un her birinde **306080 skor**, GT’de **306078 skor ve
+iki izinli eksik** vardır. İki eksik de Nemo’nun `math_timeout`, `seconds=600`
+kayıtlarıdır; sıfır veya başka kanaldan skor yazılmadı. Manifest kapsamı ve
+izinli eksik nedenleri doğrulandı. ArmoRM taşması ve nihai-cevap-yokluğu eksikleri
+yoktur. Her ArmoRM skorunun gerçek token sayısı ve şablon hash’i üretim
+metadata’sıyla eşleşir. 1189 `armorm_budget` ve 107 `length` bitişi model
+sonucu olarak tutuldu; seçerek yeniden üretim yapılmadı.
+
+| model | prompt token | toplam completion token | tahmini API USD |
+|---|---:|---:|---:|
+| Qwen3-32B | 16810000 | 38025682 | 11.99199096 |
+| Qwen3-14B | 16810000 | 37162918 | 9.85684196 |
+| Mistral-Nemo-12B | 16760360 | 21703800 | 0.95280048 |
+| Llama-3.2-3B | 18147370 | 32218638 | 11.53951904 |
+| toplam | 68527730 | 129111038 | 34.34115244 |
+
+Maliyet, dondurulmuş 2026-10-19 tarifeleri × gerçek prompt ve düşünme dahil
+toplam completion token’ıdır; GPU faturası veya ücretli inference harcaması değildir.
+Tam raporlar Tosun’da `logs/v6-full-verified-ibrahimg.json`,
+`logs/v6-full-summary-ibrahimg.json` ve `logs/v6-origin-audit.json` içinde saklanır.
+Paket kökü `~/llmr_data/benchmarks/shared_v6/exports/ibrahimg-*`;
+önceki v5/GT2 cevapları değiştirilmedi.
+
+25 Ekim’de Qwen14’ün BART shard 0/1/3 ve Nemo’nun dört GT işi kısmi skorlarla
+kesilmişti; scheduler geçmişi erişilemediği için kesin kesilme nedeni saptanamadı.
+Yalnız eksik skorlar **4251705** (BART array 0,1,3) ve **4251706** (GT array 0–3)
+ile devam ettirildi. Tamamlanmış kayıtlar ve izinli süre aşımları korundu,
+mevcut downstream bağımlılıkları düzeltildi. Yeni cevap üretimi veya protokol
+değişikliği yapılmadı. Son doğrulama bu devam ettirilen kayıtları da kapsar.
+
+```bash
+# Aynı frozen checkout ve aktif llmr ortamında, compute node üzerinde:
+python logs/check-v6-full.py qwen3-32b qwen3-14b mistral-nemo-12b llama-3.2-3b
+python logs/audit-v6-origin.py
+```
+
+### Damla’nın katkısına geçiş
+
+Kullanıcının 24 Ekim’de kesinleştirdiği sıra uygulandı: önce İbrahim G’nin tam
+katkısı doğrulandı, sonra Damla’nın pilotuna geçildi. Atama `team_v3.yaml` ile
+aynıdır: `qwen2.5-coder-32b`, `phi-4`, `gemma-3-12b`, `gemma-3-4b`.
+Yeni kaynak/protokol oluşturulmadı; aynı frozen v6 soru seti, fiyatlar ve
+model revision’ları kullanılır. Pilot k=2 ve 30 sorudur; tam katkı k=10 ve dört
+shard ile ancak **Damla’nın dört pilotu da** doğrulanırsa başlar.
+
+Gönderim işi **4252034**, erişilebilen iki modelin pilot zincirini gönderdi:
+
+| model | generation | GT / ArmoRM / BART | package |
+|---|---:|---:|---:|
+| Qwen2.5-Coder-32B | 4252035 | 4252036 / 4252037 / 4252038 | 4252039 |
+| Phi-4 | 4252040 | 4252041 / 4252042 / 4252043 | 4252044 |
+
+Gemma-3-12B ve Gemma-3-4B’nin pinned `tokenizer_config.json` erişim denetimi
+Hugging Face’te **403 GatedRepoError** döndürdü. Bu iki iş henüz gönderilmedi;
+erişim açılınca aynı revision ile devam edilecek. Token görüntülenmedi ve model
+değiştirilmedi. `logs/v6-damla-pilot-<model>.txt` gerçek gönderimleri,
+`logs/check-v6-damla-pilot.py` dört pilotun ortak doğrulamasını tutar.
+Henüz Damla’nın pilot sonucu, tam katkısı veya 12 modellik release tamamlandı denemez.
 
 Üretimdeki engine arayüzü Tosun’un kurulu vLLM kaynağından denetlendi;
 [LLM engine API](https://docs.vllm.ai/en/latest/api/vllm/v1/engine/llm_engine/)
