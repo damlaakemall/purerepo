@@ -27,8 +27,10 @@ ArmoRM’s pinned tokenizer measures the full question/answer chat during genera
 a guarded engine stop keeps successful answers within its 8192-token context.
 The producer ceiling is also 8192 new tokens. İbrahim G’s four-model pilot passed:
 240 responses and 240 scores in each channel, with no ArmoRM overflow. His full
-v6 collection has started and is not yet complete; the completed GT2 contribution
-remains available. Other members must validate their own pilots.
+v6 contribution is now validated: 306080 responses in 16 bundles, no ArmoRM
+overflow, and two explicitly missing GT math timeouts. Damla’s Coder/Phi pilots
+are submitted; her two Gemma models await gated access. The earlier GT2 contribution
+remains available; the full 12-model release is still pending.
 
 
 Settled scoring revision: [`shared_v5_gt2`](configs/benchmarks/shared_v5_gt2.yaml)
@@ -37,7 +39,7 @@ remains missing; frozen v5 answers are reused without regeneration.
 See [the decision and migration procedure](docs/walkthrough/01_egitim_verisi.md#shared_v5_gt2-kesinleşen-matematik-süre-sınırı--22-ekim-2026).
 
 
-The current scoring revision is **`shared_v5_gt2`** (İbrahim G’s four-model contribution validated; v3/v4/v5 stay frozen): 12 local open models with publicly verifiable, frozen
+The earlier completed scoring revision is **`shared_v5_gt2`** (İbrahim G’s four-model contribution validated; v3/v4/v5 stay frozen): 12 local open models with publicly verifiable, frozen
 OpenRouter provider tariffs. Six v2 models are retained and six are replaced. Costs are **estimated
 API USD**, computed from local input/output token counts, not a Tosun bill. Generation stays on Tosun,
 with `top_p: 1.0`; v5 disables Qwen3 thinking across the pool and uses 16384 output tokens (Phi-4: 12288), reserving prompt room within model context; ArmoRM overflows remain missing. İbrahim G’s four v5 GPU pilots passed the collection checks; the other members’ eight models still need pilots. Existing v1/v2/v3/v4/v5 configs and data
@@ -45,7 +47,7 @@ stay intact. See [the pool, prices and procedure](docs/walkthrough/01_egitim_ver
 
 | | status |
 |---|---|
-| Shared collection protocol | GT2 contribution validated (306080 responses, 16 bundles); four-model v6 pilot validated (240 responses, no ArmoRM overflow), full v6 collection running |
+| Shared collection protocol | GT2 contribution validated (306080 responses, 16 bundles); İbrahim G’s v6 contribution validated (306080 responses, 16 bundles, no ArmoRM overflow); Damla’s Coder/Phi pilots submitted, Gemma access pending |
 | Routers | one baseline: *quality regression* (from RouterBench) |
 | Planned paper routers | Hybrid LLM, RouteLLM, GraphRouter, MixLLM, UniRoute, BEST-Route, PILOT |
 | Open decisions | mixed quality scales, shared accounts, GPU pilots, Hybrid pair and UniRoute pool split ([DECISIONS.md](DECISIONS.md)) |
